@@ -1,6 +1,6 @@
 # Overdrive Constitution
 
-**Version:** 1.4.0
+**Version:** 1.4.1
 **Ratified:** 2026-10-26 (repository owner; see Amendment Log)
 **Applies to:** This repository (Overdrive, an AEtherForge Zero Labs
 project): an ISO C23 terminal UI library built with CMake. Instantiated
@@ -233,8 +233,12 @@ rules are law here:
 
 1. Nothing in the project's declared build, test, or CI path may assume
    baseline tooling without declaring a minimum version for it.
-2. AI and dev-assist tooling is never part of the declared build, test,
-   or CI path.
+2. AI and dev-assist tooling is never part of the declared build or
+   test path, nor of a CI job that builds or tests the library: a clean
+   checkout builds and passes its tests without it. A CI job may run a
+   pinned, deterministic validator of agent records (the `memory-check`
+   workflow's OpenSpec validation), because it checks process records,
+   not the library, and makes no model calls.
 
 ## Article IX — Agent Discipline
 
@@ -528,3 +532,14 @@ history.
   transactions, Spec Kit keeps requirements. Art. XVI: transaction
   branches; the plan comment links the OpenSpec change. MINOR bump: an
   obligation added, none removed.
+- 2026-10-26 — v1.4.1 — **Ratified** by the repository owner
+  (NeonSupernova) by explicit instruction, choosing "Clarify Art. VIII":
+  "the rule covers the library's build and test path. Pinned,
+  deterministic validators of agent records (memory-check) may run in CI,
+  but a clean checkout must never need them to build or test." Drafted
+  with AI assistance. Reason: Art. VIII rule 2 barred dev-assist tooling
+  from every CI path, which forbade the tx plugin's required
+  `openspec-validate` job, although that job neither builds nor tests the
+  library. Goal preserved: building and testing the library never depend
+  on AI or dev-assist tooling. PATCH bump: the rule's scope is stated
+  precisely; its goal is unchanged.

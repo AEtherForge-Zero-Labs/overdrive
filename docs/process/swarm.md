@@ -61,7 +61,7 @@ gh pr list --state merged --json number,title,closingIssuesReferences
 
 ## Merge authority
 
-Constitution v1.4.0, Art. XVI: **agents merge** when all of these hold —
+Constitution v1.4.1, Art. XVI: **agents merge** when all of these hold —
 
 1. every required check is green on the PR's head commit;
 2. an agent session other than the author reviewed the PR and found no
