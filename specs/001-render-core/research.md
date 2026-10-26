@@ -202,6 +202,22 @@ base like any other (following extenders attach to it):
 The Unicode version stays a documented assumption of OVD-03 (§D.4); it is
 recorded once, in `cmake/gen_unicode_tables.cmake`, and cited here.
 
+**Unicode version pin (OVD-03, #4; assumption, §D.4).** Unicode
+**18.0.0**: the latest released version on 2026-10-26, when
+`https://www.unicode.org/Public/UCD/latest/ReadMe.txt` named it final.
+`third_party/ucd/` holds its `EastAsianWidth.txt` and
+`extracted/DerivedGeneralCategory.txt` unchanged (headers dated
+2026-06-29) with the Unicode License v3, and the generator rejects files
+of any other version. R15's recalled properties, checked against these
+files: U+200D, U+00AD, U+200B, U+0600–U+0605, U+FEFF, and every R17 bidi
+control are Cf; U+FE00–U+FE0F and U+E0100–U+E01EF are Mn; so R15's
+extenders are exactly Mn, Me, and Cf minus the bidi controls.
+`EastAsianWidth.txt` has one `@missing` line (`0000..10FFFF; N`); its
+header states the W defaults for U+3400–U+4DBF, U+4E00–U+9FFF,
+U+F900–U+FAFF, and planes 2 and 3, and in 18.0.0 every such code point
+is listed explicitly as W. The generator still applies `@missing` lines.
+*Rejected:* 17.0.0 (superseded); a beta of a later version (not released).
+
 ### Clipping
 
 **R18 — Overflow-safe geometry.** Rect and coordinate arithmetic is done

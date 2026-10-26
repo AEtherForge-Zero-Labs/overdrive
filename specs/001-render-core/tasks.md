@@ -27,10 +27,10 @@ Every behavior task is preceded by its test task, which must be seen failing.
 - [ ] T011 [P] [US1] Implement `src/color.h`/`src/color.c`: `ovd_internal` downsampling (R9) and SGR encoder writing into a caller buffer (bounded)
 
 ### OVD-03 Unicode [P]
-- [ ] T012 [P] Vendor UCD `EastAsianWidth.txt` and `DerivedGeneralCategory.txt` for the pinned version into `third_party/ucd/` with the Unicode license
-- [ ] T013 [P] Write `cmake/gen_unicode_tables.cmake` generating range tables into the build tree (Art. II); wire it from `CMakeLists.txt` (append-only block)
-- [ ] T014 [P] [US1] Write `tests/test_unicode.c`: ASCII, CJK (width 2), combining marks, ZWJ emoji sequence, VS16, invalid/truncated UTF-8 → one U+FFFD per maximal subpart (`F0 80 80` → 3 × U+FFFD, `ED A0 80` → 3 × U+FFFD, `F0 9F 98` → 1 × U+FFFD, each also checked through the return value), every C0/C1/DEL → U+FFFD, lone combining mark → U+FFFD, >15-byte grapheme → U+FFFD (whole grapheme, width 1), NUL, U+2028/9, bidi controls → U+FFFD, ZWJ sequence = one grapheme of its base's width, extenders after a U+FFFD attach to it, two leading marks → one U+FFFD carrying the second, leading ZWJ → U+FFFD joining nothing, four-person family emoji (25 bytes) → one U+FFFD (R15–R17)
-- [ ] T015 [P] [US1] Implement `src/unicode.h`/`src/unicode.c`: next-grapheme iterator returning bytes, width, and replacement flag (R15–R17)
+- [x] T012 [P] Vendor UCD `EastAsianWidth.txt` and `DerivedGeneralCategory.txt` for the pinned version into `third_party/ucd/` with the Unicode license
+- [x] T013 [P] Write `cmake/gen_unicode_tables.cmake` generating range tables into the build tree (Art. II); wire it from `CMakeLists.txt` (append-only block)
+- [x] T014 [P] [US1] Write `tests/test_unicode.c`: ASCII, CJK (width 2), combining marks, ZWJ emoji sequence, VS16, invalid/truncated UTF-8 → one U+FFFD per maximal subpart (`F0 80 80` → 3 × U+FFFD, `ED A0 80` → 3 × U+FFFD, `F0 9F 98` → 1 × U+FFFD, each also checked through the return value), every C0/C1/DEL → U+FFFD, lone combining mark → U+FFFD, >15-byte grapheme → U+FFFD (whole grapheme, width 1), NUL, U+2028/9, bidi controls → U+FFFD, ZWJ sequence = one grapheme of its base's width, extenders after a U+FFFD attach to it, two leading marks → one U+FFFD carrying the second, leading ZWJ → U+FFFD joining nothing, four-person family emoji (25 bytes) → one U+FFFD (R15–R17)
+- [x] T015 [P] [US1] Implement `src/unicode.h`/`src/unicode.c`: next-grapheme iterator returning bytes, width, and replacement flag (R15–R17)
 
 ### OVD-04 Allocation and output buffer [P]
 - [ ] T016 [P] Write `tests/test_alloc.c` (part 1): counting/failing test allocator in `tests/support/test_alloc.{c,h}`; output buffer is allocated once to a requested capacity, refuses appends past it without writing, resets for reuse; allocator dispatch rejects size 0 and overflow; resize helper allocates all new blocks before releasing old ones (R30–R32)

@@ -93,3 +93,8 @@ add_test(NAME check_exports_rejects_generic COMMAND "${CMAKE_COMMAND}"
 
 ovd_add_test(test_core)
 ovd_add_test(test_headers)
+ovd_add_test(test_unicode)
+# The iterator is hidden in the shared library, so the test compiles it in.
+target_sources(test_unicode PRIVATE "${PROJECT_SOURCE_DIR}/src/unicode.c")
+target_include_directories(test_unicode PRIVATE "${PROJECT_BINARY_DIR}/generated")
+add_dependencies(test_unicode ovd_unicode_tables)
