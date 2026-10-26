@@ -9,7 +9,7 @@ this page is its human view. Task detail is in
 
 ```mermaid
 flowchart LR
-    G0{{"Gate: constitution ratified,<br/>repo created, contracts approved"}}
+    G0{{"Gate: constitution ratified ✓<br/>repo created"}}
     G0 --> O01["OVD-01<br/>build · CI · headers · core"]
     O01 --> O02["OVD-02 color"]
     O01 --> O03["OVD-03 unicode"]
@@ -59,19 +59,19 @@ Each issue owns a disjoint set of paths (checked: no overlap in
 `CMakeLists.txt` (source list) and `tests/CMakeLists.txt` (one
 `ovd_add_test` line per test). Agents only append their own lines and
 resolve conflicts by rebasing on `main`. `include/overdrive/` is frozen
-after OVD-01: changing it takes a contract-change issue approved by the
-owner.
+after OVD-01: changing it takes its own contract-change issue, labeled
+`assumption` for the owner's after-the-fact review.
 
 ## Human gates
 
-1. **G0** — ratify the constitution, create the GitHub repository, approve
-   the contracts in `specs/001-render-core/contracts/`.
-2. **OVD-01 merge** — the contract freeze.
-3. **Merges** — every PR, unless the constitution is amended for agent
-   merge (see [swarm protocol](../process/swarm.md#merge-authority)).
-4. **Manual validation** — OVD-11/OVD-12 in Windows Terminal and one POSIX
-   terminal. Agents cannot observe a real terminal and report it as
-   UNVERIFIED.
+Agents merge through the Art. XVI gate
+([swarm protocol](../process/swarm.md#merge-authority)). A human is
+needed only for:
+
+1. **Manual validation** — OVD-11/OVD-12 in Windows Terminal and one POSIX
+   terminal. Agents cannot observe a real terminal; they merge with the
+   gap reported as UNVERIFIED and a `needs-human` issue tracks the check.
+2. **License and publication** — before any release; not on this graph.
 
 ## Consumer integration (not in this graph)
 

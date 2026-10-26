@@ -5,7 +5,7 @@ marks a decision that needs the owner before the dependent issue starts.
 
 ## A. Analysis: OVD-IDENTITY-001 against the constitution
 
-| Topic | Identity spec | Constitution (v1.2.0 proposed) | Resolution |
+| Topic | Identity spec | Constitution (v1.3.0) | Resolution |
 |---|---|---|---|
 | Module list (§4) | Eight modules named | Art. VII: no speculative abstraction | Modules are vocabulary. This feature creates Core, Render, Canvas, Platform only; Art. VII states this explicitly. |
 | Example headers (§3.5) | `render.h`, `layout.h`, `motion.h` | Art. VII: a header needs a present requirement | Ship `core.h`, `terminal.h`, `render.h`, umbrella `overdrive.h`. No `layout.h`/`motion.h` until those features. |
@@ -62,8 +62,8 @@ selectors; graphemes = base + trailing zero-width code points, ≤ 15 bytes.
 Lone combining mark → U+FFFD. Tables generated at build time by a
 `cmake -P` script from vendored UCD files (Art. II: generated output is
 never committed; Art. VIII: CMake is already declared, no new tool).
-`[OPEN]` Unicode version to pin — proposal: the latest released version
-at implementation time, recorded in `cmake/` and docs. Terminals
+Unicode version: the latest released version at implementation time,
+recorded in `cmake/` and here (assumption, §D.4). Terminals
 disagree on emoji and ambiguous widths; ambiguous (A) is narrow.
 
 **R6 — Control-character policy.** C0, DEL, C1 → U+FFFD at the canvas
@@ -119,13 +119,11 @@ Replay interpreter in `tests/support/`.
 **R14 — Branching.** `main` only, protected; issue branches merge through
 PRs. *Rejected:* `develop`/`main` split — nothing to stage yet.
 
-## D. Open decisions for the owner
+## D. Owner decisions (2026-10-26)
 
-1. Ratify constitution v1.2.0 (or amend first).
-2. Merge authority for the agent swarm: keep human merge (Art. XVI as
-   drafted) or amend to allow agents to merge when all required checks
-   are green and a reviewer agent approves.
-3. License (blocks publication, not implementation).
-4. Unicode version pin (R5) — default: latest release at implementation.
-5. Confirm `@NeonSupernova` as CODEOWNER and GitHub repository
-   `AEtherForge-Zero-Labs/overdrive`.
+1. Constitution ratified as v1.3.0, with agent merge.
+2. Merge authority: agents merge unless a human is needed (Art. XVI).
+3. License: undecided; blocks publication only. Repository private.
+4. Unicode version pin (R5): delegated as a documented assumption to OVD-03.
+5. Repository: `AEtherForge-Zero-Labs/overdrive`, owner `@NeonSupernova`.
+6. claude-automata adopted as the autonomy harness, alongside Spec Kit.

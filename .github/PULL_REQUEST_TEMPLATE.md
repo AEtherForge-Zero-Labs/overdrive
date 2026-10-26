@@ -24,6 +24,11 @@ Closes #<!-- issue number -->
 
 **Unverified:** <!-- what was not run or observed, e.g. "not tested in Windows Terminal"; or "None" -->
 
+## Assumptions
+
+<!-- Every decision made where the spec was silent (Art. IX), or "None".
+     Shapes API/architecture/behavior? Also in research.md, and label the PR `assumption`. -->
+
 ## AI use
 
 <!-- Which tools, what they did, and what the human reviewed and verified (Art. XVI). -->
@@ -37,4 +42,5 @@ Closes #<!-- issue number -->
 - [ ] No new module, header, option, or dependency without a present requirement in the plan (Art. VII)
 - [ ] No check weakened or suppressed (Art. XI)
 - [ ] Documentation claims are implemented and measured where required (Art. XV)
-- [ ] Every commit carries `Assisted-by:` where AI was used; no `Signed-off-by:` added by an agent
+- [ ] Every AI-assisted commit carries the tool's co-author trailer or `Assisted-by:`; no `Signed-off-by:` added by an agent
+- [ ] Reviewed by an agent session other than the author; merge gate holds (Art. XVI)

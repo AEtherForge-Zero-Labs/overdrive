@@ -8,15 +8,15 @@ other or on the constitution. Subordinate to the constitution and
 
 | Role | Who | Does |
 |---|---|---|
-| **Owner** | human (CODEOWNERS) | Ratifies, approves contracts, merges (unless delegated, below), runs manual terminal checks |
-| **Dispatcher** | one agent session | Reads `workgraph.json`, creates issues (with owner approval), assigns ready issues to workers, watches CI, never writes product code |
+| **Owner** | human (CODEOWNERS) | Only Art. XVI's human-needed items: ratification, license, publishing, destructive ops, secrets, real-terminal checks; reviews `assumption`-labeled PRs after the fact |
+| **Dispatcher** | one agent session | Reads `workgraph.json`, keeps issues in sync with it, dispatches ready issues to workers, watches CI, never writes product code |
 | **Worker** | one agent per issue | Plans, implements, tests, opens a PR for exactly one issue |
 | **Reviewer** | a separate agent session | Reviews a PR against the spec, contracts, constitution, and `checklists/identity-review.md`; never reviews its own work |
 
 ## Readiness
 
 An issue is **ready** when every `depends_on` issue is merged into `main`,
-it has no unanswered `open_decision`, and no other worker holds it.
+it has no `needs-human` label, and no other worker holds it.
 Dispatcher computes readiness from `workgraph.json` plus GitHub state:
 
 ```bash
@@ -30,9 +30,8 @@ gh pr list --state merged --json number,title,closingIssuesReferences
    `Claimed by <session-id> on <branch>`. One claim per issue.
 2. Worker creates a worktree and branch `<number>-<slug>` from current
    `main`. Never push a `claude/*` branch.
-3. Worker posts the plan comment (template in `AGENTS.md`). Under
-   Art. XVI the issue's assignee agrees to it; with delegated authority
-   (below), the reviewer agent's approval of the plan stands in.
+3. Worker posts the plan comment (template in `AGENTS.md`) and proceeds;
+   assumptions are documented, not waited on (Art. IX).
 4. A worker that halts posts the BLOCKED template and removes
    `agent:claimed`, adding `agent:blocked`.
 
@@ -44,33 +43,45 @@ gh pr list --state merged --json number,title,closingIssuesReferences
 - Need a file you don't own? Stop and say so on the issue (Art. IX). Never
   edit it "just a little".
 - `include/overdrive/` is frozen after OVD-01. A worker that finds the
-  contract wrong halts (Art. XII) and the dispatcher opens a
-  contract-change issue for the owner.
+  contract wrong stops that issue and the dispatcher opens a
+  contract-change issue; it is worked, reviewed, and merged like any
+  other, with the change recorded in `research.md` and labeled
+  `assumption`.
 
 ## Pull requests
 
 - One PR per issue, PR template filled in completely, `Closes #<number>`.
 - Required checks: `ci-ok` (all platforms) and the exported-symbol check.
 - The reviewer agent leaves a review comment with a verdict and the
-  identity checklist results. A verdict is advice unless authority is
-  delegated.
+  identity checklist results.
 - After a merge, every open PR rebases on `main` before its next review.
 
 ## Merge authority
 
-**As ratified-pending (constitution v1.2.0, Art. XVI): humans merge.** The
-swarm runs to "PR green and reviewed", and the owner merges. This is the
-default and the guard hook enforces it.
+Constitution v1.3.0, Art. XVI: **agents merge** when all of these hold —
 
-**Delegated mode (needs an amendment).** For fully autonomous waves, the
-owner may amend Art. XVI to allow an agent to merge a PR when **all** of
-these hold: required checks green on the PR head; a reviewer agent other
-than the author approved; the PR changes no path under
-`include/overdrive/`, `.specify/memory/`, `.github/`, `.claude/`, `AGENTS.md`,
-or `CLAUDE.md`; and the issue has no `human_gate`. The amendment must also
-change `.claude/settings.json` and `.claude/hooks/guard.sh`, as one
-declared change (Art. XI). Until that amendment is ratified, delegated
-mode does not exist.
+1. every required check is green on the PR's head commit;
+2. an agent session other than the author reviewed the PR and found no
+   unresolved defect (all agents share one GitHub account, so the review
+   is a PR comment with a verdict, not a GitHub approval);
+3. neither the PR nor its issue carries `needs-human`;
+4. the PR changes no owner-reserved path: the constitution, `LICENSE`,
+   `.github/CODEOWNERS`, `.claude/hooks/guard.sh`, `.claude/settings.json`.
+
+`.claude/hooks/guard.sh` checks 1, 3, and 4 mechanically on every
+`gh pr merge`, and refuses `--admin`. Merge with
+`gh pr merge <number> --squash --delete-branch`.
+
+A human is needed only for the Art. XVI list: constitution changes,
+license/visibility/ownership, publishing, destructive operations,
+secrets and org settings, weakening protection, and real-terminal
+observations. Agents label those `needs-human` and keep working on other
+ready issues.
+
+**Server-side protection.** On a private repository under the free plan,
+GitHub does not enforce rulesets, so the gate above is enforced only by
+the guard hook and agent discipline. Making it server-enforced needs the
+repository public or a paid plan, which is an owner decision.
 
 ## What agents cannot verify
 

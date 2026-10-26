@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-26
 
-**Status**: Draft (awaiting review; constitution v1.2.0 is PROPOSED)
+**Status**: Approved for implementation (constitution v1.3.0)
 
 **Input**: "Prepare a specification for the rendering engine and its minimum
 viable architecture. Define the public contracts for terminal lifecycle,
@@ -285,6 +285,6 @@ required for correctness.
 
 ## Dependencies on decisions outside this spec
 
-- Constitution v1.2.0 ratification.
+- Constitution ratification (done: v1.3.0).
 - GitHub repository creation under AEtherForge Zero Labs.
 - License choice (blocks publication only, not implementation).

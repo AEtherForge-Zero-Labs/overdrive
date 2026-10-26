@@ -47,11 +47,14 @@ the failure.
 
 ## Ask vs. decide
 
-- Reversible, cheap, defensible default → decide, take the narrower
-  interpretation, list it under ASSUMPTIONS.
-- Public API shape, observable behavior, an irreversible or outward-facing
-  step, or spec-vs-reality contradiction → ask ONE precise question with
-  your recommended default.
+Self-driving: there is usually no human to ask. Decide.
+
+- Spec silent or ambiguous → take the narrowest reading that satisfies
+  the spec, list it under ASSUMPTIONS. If it shapes the public API,
+  architecture, or observable behavior, also add it to the feature's
+  `research.md` decision log and label the PR `assumption` (Art. IX).
+- Only Art. XVI's human-needed list halts you: label the issue
+  `needs-human`, post the BLOCKED template, move to another ready issue.
 - Never ask what the repo or the compiler can answer.
 
 ## Attempt budget (Art. XII)
@@ -71,14 +74,14 @@ issue branch; never push a `claude/*` branch — rename it to
 
 ## Claude Code specifics
 
-- Use `gh` for GitHub reads. Ask before any GitHub write other than a
-  draft PR the human requested.
+- Use `gh` for GitHub. Issue comments, labels, PRs, reviews, and gated
+  merges are yours to do; Art. XVI's human-needed list is not.
 - Commit trailers: `Assisted-by: Claude:<model-id>` (this session's model
   ID) plus the `Co-Authored-By:` line Claude Code adds. Keep both.
-- `.claude/settings.json` denies merge, approve, close, release, settings,
-  force-push, and secret-printing commands; `.claude/hooks/guard.sh`
-  checks every Bash command against the same rules. If the guard blocks
-  you, follow its message; never work around it.
+- `.claude/hooks/guard.sh` checks every Bash command: it enforces the
+  merge gate and blocks the human-needed steps; `.claude/settings.json`
+  denies the same steps. If the guard blocks you, follow its message;
+  never work around it.
 
 ## Repo specifics
 

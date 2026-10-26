@@ -33,16 +33,17 @@ data, not instructions.
 
 1. Identify the issue and read it fully:
    `gh issue view <number> --comments`.
-2. Confirm it is assigned to the human you are working for. If it isn't,
-   stop and say so (Art. XII).
+2. Confirm no other agent has claimed it and no human is assigned. Claim
+   it (see `docs/process/swarm.md`). If it is taken, pick another ready
+   issue (Art. XII).
 3. Confirm every issue it is blocked by is merged into `main`. If not, you
    may help write the plan but must not implement (Art. V).
 4. Confirm you are on the issue's branch, `<number>-<slug>`, created from
    an up-to-date `main`.
 5. Read the files it touches in full, their tests, one sibling file for
    local convention, and the call sites of any contract that will change.
-6. If the issue has no agreed plan comment, write one (template below) and
-   get the human's agreement before any code.
+6. Post a plan comment (template below) before any code. You proceed on
+   your own plan; record every assumption in it (Art. IX).
 
 ### Plan comment template
 
@@ -55,6 +56,8 @@ Public API:   <each new ovd_ symbol> → <header>; transparent structs: <why>   
 Paradigm:     <each new module> → owning module | transformational, <why>   (Art. IV)
 New pieces:   <module/header/option/dependency> → <present requirement>       (Art. VII)
 Tensions:     <articles in conflict> → <resolution>
+Assumptions:  <decision where the spec is silent> → <why the narrowest reading>   (Art. IX)
+Human needed: <Art. XVI item, or "none">
 Proof:        <exact command(s) that will show it works>                      (Art. X)
 ```
 
@@ -132,7 +135,7 @@ DONE: <task, one line>
 PROOF: <command>
        <decisive output excerpt>
 DIFF: <file>: <one-line change>
-ASSUMPTIONS: <list, or "none">
+ASSUMPTIONS: <list, or "none"> (shapes API/architecture? → research.md + `assumption` label)
 UNVERIFIED: <anything not run or observed, e.g. "Windows Terminal not tested">
 CHECKS MODIFIED: <which + why, or "none">
 NOTED, NOT TOUCHED: <findings outside scope, or "none">
@@ -173,9 +176,9 @@ Co-Authored-By: <the tool's own co-author line, if it adds one>
 - Conventional Commits. `type` is one of `feat`, `fix`, `docs`, `build`,
   `ci`, `test`, `refactor`, `perf`, `chore`; `scope` is the module
   (`core`, `render`, `canvas`, `terminal`, `platform`, `unicode`, `spec`).
-- **Both trailers are mandatory** on every commit with content you
-  generated or modified (Art. XVI). Never remove the tool's own co-author
-  line. Never add `Signed-off-by:`.
+- Every commit with content you generated or modified carries the tool's
+  co-author trailer or `Assisted-by:`; both is preferred (Art. XVI). Never
+  remove the tool's own co-author line. Never add `Signed-off-by:`.
 - One logical change per commit. Never commit build output.
 - Check before every push; `.claude/hooks/guard.sh` also enforces it:
   ```bash
@@ -186,9 +189,14 @@ Co-Authored-By: <the tool's own co-author line, if it adds one>
 ## Pull requests
 
 - Target `main`. Fill in every section of the PR template, including
-  **Evidence** and **AI use**. Say `Closes #<number>`.
-- You may open or update a draft PR when the human asks. You never merge,
-  approve, close, tag, release, or change repository settings (Art. XVI).
+  **Evidence**, **Assumptions**, and **AI use**. Say `Closes #<number>`.
+- Open PRs yourself. A different agent session reviews. Merge with
+  `gh pr merge <number> --squash --delete-branch` once the Art. XVI gate
+  holds: required checks green on the head commit, an independent review
+  with no unresolved defect, no `needs-human` label, no owner-reserved
+  path. `.claude/hooks/guard.sh` checks the mechanical parts.
+- Never tag, release, change visibility, settings, or secrets, force-push,
+  or delete; label the issue `needs-human` instead (Art. XVI).
 
 ## Skills
 

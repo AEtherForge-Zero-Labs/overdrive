@@ -34,7 +34,7 @@ one write per frame; no process-wide state
 
 ## Constitution Check
 
-*Gate against constitution v1.2.0 (PROPOSED). Re-checked after design.*
+*Gate against constitution v1.3.0. Re-checked after design.*
 
 | Article | Gate | Status |
 |---|---|---|
@@ -49,7 +49,7 @@ one write per frame; no process-wide state
 | XIII Security | Caller text never becomes control sequences | PASS — FR-032, R6, dedicated tests |
 | XIV Identity/API | Every public symbol listed | PASS — table below; prefix check in CI |
 | XV Claims | No unmeasured claims | PASS — README states design phase; targets labeled |
-| XVI Process | Issues, PRs, human merge | PASS as drafted; see research §D.2 |
+| XVI Process | Issues, PRs, gated agent merge | PASS — guard hook enforces the gate |
 
 ## Public API (Art. XIV plan gate)
 

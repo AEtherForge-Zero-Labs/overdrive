@@ -19,7 +19,7 @@
       "owns": ["CMakeLists.txt","CMakePresets.json","cmake/check_exports.cmake","include/overdrive/","src/core.c","tests/CMakeLists.txt","tests/test_core.c","tests/test_headers.c",".github/workflows/ci.yml"],
       "requirements": ["FR-001","FR-003","FR-040","FR-041","SC-005","SC-006"],
       "proof": ["cmake --preset debug","cmake --build --preset debug","ctest --preset debug","cmake --preset debug-clang && cmake --build --preset debug-clang && ctest --preset debug-clang"],
-      "tier": "opus", "human_gate": "contract freeze: owner approves include/overdrive/ before merge"
+      "tier": "opus", "note": "contract freeze: include/overdrive/ changes after this need a contract-change issue"
     },
     {
       "id": "OVD-02", "title": "Color downsampling and SGR encoding",
@@ -32,7 +32,7 @@
       "phase": 1, "tasks": ["T012","T013","T014","T015"], "depends_on": ["OVD-01"],
       "owns": ["third_party/ucd/","cmake/gen_unicode_tables.cmake","src/unicode.h","src/unicode.c","tests/test_unicode.c"],
       "requirements": ["FR-031","FR-032"], "proof": ["ctest --preset debug -R test_unicode"], "tier": "opus",
-      "open_decision": "Unicode version pin (research R5)"
+      "assumption": "pin the latest released Unicode version; record it in research.md"
     },
     {
       "id": "OVD-04", "title": "Allocator hook and output buffer",
@@ -95,7 +95,7 @@
       "phase": 5, "tasks": ["T037","T038"], "depends_on": ["OVD-09","OVD-11"],
       "owns": ["examples/","docs/validation/manual-checklist.md"],
       "requirements": ["SC-007"], "proof": ["cmake --build --preset debug --target hello_overdrive"], "tier": "sonnet",
-      "human_gate": "owner runs the manual checklist in Windows Terminal and one POSIX terminal"
+      "needs_human_followup": "owner runs the manual checklist in Windows Terminal and one POSIX terminal; does not block merge"
     },
     {
       "id": "OVD-14", "title": "Document the implemented state",
