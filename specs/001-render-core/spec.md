@@ -185,11 +185,12 @@ required for correctness.
 **Core**
 - **FR-001**: Every fallible public function MUST report failure through
   an `OvdResult` and MUST leave its out parameters and observable state
-  unchanged on failure. The one exception is `ovd_frame_end`, which closes
-  the frame on every outcome and marks the screen unknown on
-  `OVD_ERROR_IO` (R21).
+  unchanged on failure. The one exception is `ovd_frame_end` returning
+  `OVD_ERROR_IO`, which closes the frame and marks the screen unknown
+  (R21).
 - **FR-002**: The library MUST keep no process-wide mutable state; two
-  terminals MUST be usable in one process.
+  terminals MUST be usable in one process (for system terminals, with the
+  limits of R29).
 - **FR-003**: The library MUST report its own version at run time.
 
 **Terminal lifecycle (Platform)**
@@ -267,8 +268,8 @@ required for correctness.
   (100% of test frames).
 - **SC-002**: An unchanged frame writes 0 bytes.
 - **SC-003**: Changing one narrow cell writes at most 64 bytes at
-  truecolor depth with both colors RGB and no attributes, at sizes up to
-  999×999 (budget: cursor move ≤ 10, SGR with two RGB colors ≤ 40, glyph ≤
+  truecolor depth with both colors RGB, no attributes, and
+  `synchronized_output` off, at sizes up to 999×999 (budget: cursor move ≤ 10, SGR with two RGB colors ≤ 40, glyph ≤
   4, reset 4, plus margin; measured by the benchmark).
 - **SC-004**: Frames whose size equals the terminal's current buffers make
   0 allocator calls, whatever they draw (R30–R32; measured by the

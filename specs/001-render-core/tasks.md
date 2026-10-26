@@ -29,8 +29,8 @@ Every behavior task is preceded by its test task, which must be seen failing.
 ### OVD-03 Unicode [P]
 - [ ] T012 [P] Vendor UCD `EastAsianWidth.txt` and `DerivedGeneralCategory.txt` for the pinned version into `third_party/ucd/` with the Unicode license
 - [ ] T013 [P] Write `cmake/gen_unicode_tables.cmake` generating range tables into the build tree (Art. II); wire it from `CMakeLists.txt` (append-only block)
-- [ ] T014 [P] [US1] Write `tests/test_unicode.c`: ASCII, CJK (width 2), combining marks, ZWJ emoji sequence, VS16, invalid/truncated UTF-8 → one U+FFFD per maximal subsequence, every C0/C1/DEL → U+FFFD, lone combining mark → U+FFFD, >15-byte grapheme → U+FFFD (whole grapheme, width 1), NUL, U+2028/9, bidi controls → U+FFFD, ZWJ sequence = one grapheme of its base's width, extenders after a U+FFFD attach to it (R15–R17)
-- [ ] T015 [P] [US1] Implement `src/unicode.h`/`src/unicode.c`: next-grapheme iterator returning bytes, width, and replacement flag (R5, R6)
+- [ ] T014 [P] [US1] Write `tests/test_unicode.c`: ASCII, CJK (width 2), combining marks, ZWJ emoji sequence, VS16, invalid/truncated UTF-8 → one U+FFFD per maximal subsequence, every C0/C1/DEL → U+FFFD, lone combining mark → U+FFFD, >15-byte grapheme → U+FFFD (whole grapheme, width 1), NUL, U+2028/9, bidi controls → U+FFFD, ZWJ sequence = one grapheme of its base's width, extenders after a U+FFFD attach to it, two leading marks → one U+FFFD carrying the second, leading ZWJ → U+FFFD joining nothing, four-person family emoji (25 bytes) → one U+FFFD (R15–R17)
+- [ ] T015 [P] [US1] Implement `src/unicode.h`/`src/unicode.c`: next-grapheme iterator returning bytes, width, and replacement flag (R15–R17)
 
 ### OVD-04 Allocation and output buffer [P]
 - [ ] T016 [P] Write `tests/test_alloc.c` (part 1): counting/failing test allocator in `tests/support/test_alloc.{c,h}`; output buffer is allocated once to a requested capacity, refuses appends past it without writing, resets for reuse; allocator dispatch rejects size 0 and overflow; resize helper allocates all new blocks before releasing old ones (R30–R32)
@@ -43,7 +43,7 @@ Every behavior task is preceded by its test task, which must be seen failing.
 ### OVD-06 Platform layer [P]
 - [ ] T020 [P] [US2] Write `src/platform/platform.h`: is-terminal, size, enter/leave (records prior modes in a struct), write-all, environment lookup — no OS types in the header
 - [ ] T021 [P] [US2] Implement `src/platform/platform_posix.c` (termios ECHO only, on stdin only if it is a terminal (R27); TIOCGWINSZ; write loop with EINTR; enter/leave order and best-effort restore per R26, R28) — verify each call against POSIX docs and cite them in the PR
-- [ ] T022 [P] [US2] Implement `src/platform/platform_windows.c` (console modes, code page 65001, `GetConsoleScreenBufferInfo`, `WriteFile` loop) — verify against Microsoft docs and cite them
+- [ ] T022 [P] [US2] Implement `src/platform/platform_windows.c` (console modes incl. `DISABLE_NEWLINE_AUTO_RETURN`, code page 65001, `GetConsoleScreenBufferInfo`, `WriteFile` loop; order, rollback, and restore per R26–R28) — verify against Microsoft docs and cite them
 - [ ] T023 [P] [US2] Implement color detection from the environment (R10) in platform-independent `src/detect.c` with `tests/test_detect.c` using an injected environment lookup; first match wins, NO_COLOR only when non-empty (R36)
 
 ## Phase 2 — Canvas (depends on OVD-03, OVD-04)

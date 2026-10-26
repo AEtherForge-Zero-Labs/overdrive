@@ -83,7 +83,7 @@ sequenceDiagram
 | Object | Owner | Lifetime |
 |---|---|---|
 | `OvdTerminal` | caller (`create`/`destroy`) | until destroy |
-| `OvdCanvas` | terminal | `frame_begin` → `frame_end`/`abandon` |
+| `OvdCanvas` | terminal | create → destroy; one per terminal, open only from `frame_begin` to `frame_end`/`abandon` (research R23) |
 | cell buffers, output buffer | terminal | allocated at create and on resize only; output sized to the worst-case frame (research R30) |
 | `OvdCellView.text` | canvas | until next draw or frame end |
 | sink, allocator callbacks | caller | must outlive the terminal |

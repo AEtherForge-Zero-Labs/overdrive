@@ -25,7 +25,8 @@ typedef enum OvdColorKind : uint8_t {
 /* A transparent value type: copied per cell, so it must stay small and
  * allocation-free. Only the fields named by kind are meaningful; the canvas
  * stores colors with the other fields zeroed, so two colors that look the
- * same compare equal. An out-of-range kind is drawn as the default color.
+ * same compare equal. An out-of-range kind is stored, and reads back, as
+ * OVD_COLOR_KIND_DEFAULT.
  * Build values with the functions below rather than literals. */
 typedef struct OvdColor {
     OvdColorKind kind;
@@ -95,9 +96,10 @@ typedef struct OvdCellView {
 typedef struct OvdCanvas OvdCanvas;
 
 /* Starts a frame. Re-reads the terminal size first; if it changed, the
- * frame has the new size and will be a full redraw. *out is a canvas of
- * the terminal's size, every cell a space in OVD_STYLE_DEFAULT, clip set
- * to the whole canvas. It is owned by the terminal and open until
+ * frame has the new size and will be a full redraw. *out is the
+ * terminal's canvas, the same pointer on every call for the terminal's
+ * whole life, now of the terminal's size with every cell a space in
+ * OVD_STYLE_DEFAULT and the clip set to the whole canvas. It is open until
  * ovd_frame_end or ovd_frame_abandon. Allocates only if the size differs
  * from the terminal's current buffers, and then allocates all new buffers
  * before releasing the old ones.
@@ -105,23 +107,26 @@ typedef struct OvdCanvas OvdCanvas;
  * Fails with OVD_ERROR_INVALID_ARGUMENT for nullptr arguments;
  * OVD_ERROR_STATE if a frame is open or the terminal's sink is running;
  * OVD_ERROR_ALLOCATION if a resize needed memory that was refused; or
- * OVD_ERROR_PLATFORM if the size could not be read or reads as 0. On
- * failure no frame is open and the terminal keeps its old buffers and size;
- * the next call tries again. */
+ * OVD_ERROR_PLATFORM if the size could not be read or reads as 0. Failure
+ * changes nothing: a frame already open stays open; otherwise none opens,
+ * the terminal keeps its old buffers and size (a pending
+ * ovd_terminal_set_size stays pending), and the next call tries again. */
 [[nodiscard]] OVD_API OvdResult ovd_frame_begin(OvdTerminal *terminal, OvdCanvas **out);
 
-/* Writes the difference between this frame and the screen, in a single
- * write, and closes the frame. Never allocates. A frame identical to the
- * screen writes nothing. Any other output ends with an SGR reset, never
- * prints a glyph while the cursor waits to wrap, never scrolls, and so
- * renders the same with autowrap on or off. With synchronized_output it is
- * wrapped in DEC mode 2026 markers.
+/* Closes the canvas, then writes the difference between this frame and
+ * the screen in a single write. Never allocates. A frame identical to the
+ * screen writes nothing. Any other output is: the DEC mode 2026 begin
+ * marker (with synchronized_output); for a full redraw, SGR reset and
+ * erase display; the cell updates; SGR reset; the mode 2026 end marker
+ * (with synchronized_output). It never prints a glyph while the cursor
+ * waits to wrap and never scrolls, so it renders the same with autowrap
+ * on or off.
  *
- * Fails with OVD_ERROR_INVALID_ARGUMENT for nullptr; OVD_ERROR_STATE if
- * no frame is open or the sink is running; or OVD_ERROR_IO if the output
- * could not be written. This is the one function that changes state on
- * failure: the frame is closed on every outcome, and after OVD_ERROR_IO the
- * screen is unknown, so the next frame is a full redraw. */
+ * Fails with OVD_ERROR_INVALID_ARGUMENT for nullptr, or OVD_ERROR_STATE if
+ * no frame is open or the sink is running; these change nothing. Fails
+ * with OVD_ERROR_IO if the output could not be written: the one failure
+ * in the library that changes state. The frame is closed, as on OVD_OK,
+ * and the screen is unknown, so the next frame is a full redraw. */
 [[nodiscard]] OVD_API OvdResult ovd_frame_end(OvdTerminal *terminal);
 
 /* Closes the open frame without writing anything. Does nothing if no
@@ -135,8 +140,9 @@ OVD_API void ovd_frame_abandon(OvdTerminal *terminal);
  * becomes a space in its own style even if it lies outside the clip, so
  * the canvas never holds half a glyph.
  *
- * After its frame ends or is abandoned, the canvas is closed: drawing does
- * nothing and queries return zero values. Using it after
+ * Between frames the canvas is closed: drawing does nothing, queries
+ * return zero values, and ovd_canvas_text returns 0. The next
+ * ovd_frame_begin reopens the same canvas. Using it after
  * ovd_terminal_destroy is undefined. nullptr does nothing. */
 
 OVD_API OvdSize ovd_canvas_size(const OvdCanvas *canvas);
@@ -154,14 +160,17 @@ OVD_API void ovd_canvas_fill(OvdCanvas *canvas, OvdRect area, OvdStyle style);
 /* Draws length bytes of UTF-8 on row y starting at column x, one
  * grapheme per cell (two for wide graphemes), and returns the number of
  * columns the text spans, clipped or not, saturating at INT32_MAX. A
- * nullptr text draws nothing and returns 0.
+ * nullptr text, or a nullptr or closed canvas, draws nothing and returns
+ * 0.
  *
  * A grapheme is a base code point plus any following combining marks
  * (Mn, Me), format characters (Cf, except bidi controls), variation
  * selectors, and, after a ZWJ, the next code point unless it is one of
  * the replaced kinds below. Its width is its
  * base's: 2 for East Asian Width W or F, otherwise 1; what follows the
- * base never changes it. Segmentation restarts with each call.
+ * base never changes it. Segmentation restarts with each call. A U+FFFD
+ * produced below is a base: extenders after it attach to it, and a
+ * replaced ZWJ joins nothing.
  *
  * Text is untrusted. Each of these is drawn as one U+FFFD of width 1:
  * every maximal invalid UTF-8 subsequence; C0 controls (including NUL,

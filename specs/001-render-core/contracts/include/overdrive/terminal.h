@@ -36,13 +36,15 @@ typedef enum OvdBackend : uint8_t {
 } OvdBackend;
 
 /* Receives one frame's output. Called at most once per ovd_frame_end,
- * with length > 0. Return false if the bytes could not be delivered;
- * the frame then fails with OVD_ERROR_IO and the next frame is a full
- * redraw.
+ * with length > 0, after the canvas is closed. Return false if the bytes
+ * could not be delivered; the frame then fails with OVD_ERROR_IO and the
+ * next frame is a full redraw.
  *
- * While the sink runs, its terminal is busy: fallible calls on that
- * terminal return OVD_ERROR_STATE and the others do nothing. Calling
- * ovd_terminal_destroy on it from the sink is undefined. */
+ * While the sink runs, its terminal is busy: ovd_frame_begin,
+ * ovd_frame_end, and ovd_terminal_set_size return OVD_ERROR_STATE;
+ * ovd_frame_abandon, ovd_terminal_invalidate, and drawing do nothing;
+ * ovd_terminal_size and ovd_terminal_color_depth return their real values.
+ * Calling ovd_terminal_destroy on it from the sink is undefined. */
 typedef bool (*OvdSink)(void *context, const char *bytes, size_t length);
 
 /* Optional replacement for the C library allocator. Overdrive allocates
@@ -73,25 +75,27 @@ typedef struct OvdTerminalConfig {
      * color_depth is ignored. The headless backend never reads the
      * environment: it always uses color_depth. */
     bool detect_color_depth;
-    /* Default OVD_COLOR_DEPTH_TRUECOLOR. */
+    /* Default OVD_COLOR_DEPTH_TRUECOLOR. Validated even when detection
+     * will override it. */
     OvdColorDepth color_depth;
 
     /* System backend only. Use the alternate screen so the user's screen
      * contents and scrollback are untouched (default true). If false, the
      * last frame stays on screen after destroy, with the cursor at column
-     * 0 of the last row. */
+     * 0 of its last row. */
     bool alternate_screen;
     /* Wrap each frame in synchronized-output markers (DEC mode 2026).
      * Off by default: support is not detected in this version. */
     bool synchronized_output;
 
-    /* Headless backend only: the initial size (default 80x24) and the
-     * output sink. sink may be nullptr to discard output. */
+    /* Headless backend only, and validated only for it: the initial size
+     * (default 80x24) and the output sink. sink may be nullptr to discard
+     * output. */
     OvdSize headless_size;
     OvdSink sink;
     void *sink_context;
 
-    /* nullptr selects malloc/realloc/free. Copied at create; the
+    /* nullptr selects malloc/free. Copied at create; the
      * functions and context must outlive the terminal. */
     const OvdAllocator *allocator;
 } OvdTerminalConfig;
@@ -100,30 +104,35 @@ OVD_API OvdTerminalConfig ovd_terminal_config_default(void);
 
 /* Acquires the terminal. For the system backend, in this order: requires
  * stdout to be a terminal (writing nothing otherwise); on Windows, enables
- * virtual-terminal output and sets the UTF-8 output code page; turns off
+ * virtual-terminal output with DISABLE_NEWLINE_AUTO_RETURN and sets the
+ * UTF-8 output code page; turns off
  * input echo if stdin is a terminal (skipped, not an error, if it is not);
  * reads the size; allocates; then, in one write, enters the alternate
  * screen if requested, hides the cursor, and disables autowrap. Each
  * operating-system mode is read before it is changed, so destroy can
  * restore it. Input is not read in this version. The headless backend
- * changes no modes and writes nothing.
+ * changes no modes and writes nothing. Either backend allocates its one
+ * canvas here.
  *
  * Fails with OVD_ERROR_NOT_A_TERMINAL if stdout is not a terminal;
  * OVD_ERROR_INVALID_ARGUMENT for nullptr arguments, an out-of-range
  * backend or color depth, a headless size with a non-positive component,
  * or an allocator with a nullptr function; OVD_ERROR_ALLOCATION, including
- * when the size makes a buffer size overflow; or OVD_ERROR_PLATFORM,
- * including a system terminal whose size reads as 0. On failure every
- * completed step is undone in reverse order, nothing remains changed, and
- * *out is untouched. */
+ * when the size makes a buffer size overflow; OVD_ERROR_PLATFORM,
+ * including a system terminal whose size reads as 0; or OVD_ERROR_IO if
+ * the enter sequence could not be written, in which case the exit
+ * sequence is written best-effort first. On failure every completed step
+ * is undone in reverse order, nothing remains changed, and *out is
+ * untouched. */
 [[nodiscard]] OVD_API OvdResult ovd_terminal_create(const OvdTerminalConfig *config,
                                                     OvdTerminal **out);
 
 /* Abandons an open frame, restores what create changed, and frees the
  * terminal. For the system backend it writes, in one write, SGR reset,
  * autowrap on, cursor visible, and then leave the alternate screen if it
- * was entered, or else move the cursor to column 0 of the last row; then restores input echo, the code page, and the output mode to
- * the values read at create, in that order. Every step is attempted even
+ * was entered, or else move the cursor to column 0 of the last frame's
+ * last row; then restores input echo, the code page, and the output mode
+ * to the values read at create, in that order. Every step is attempted even
  * if an earlier one fails. Cursor visibility and autowrap are set to their
  * defaults, not to earlier values: they cannot be read back without input.
  * nullptr does nothing. Not async-signal-safe; if the process exits

@@ -63,7 +63,8 @@ Lone combining mark → U+FFFD. Tables generated at build time by a
 `cmake -P` script from vendored UCD files (Art. II: generated output is
 never committed; Art. VIII: CMake is already declared, no new tool).
 Unicode version: the latest released version at implementation time,
-recorded in `cmake/` and here (assumption, §D.4). Terminals
+recorded once in `cmake/gen_unicode_tables.cmake` and cited here
+(assumption, §D.4). Terminals
 disagree on emoji and ambiguous widths; ambiguous (A) is narrow. The
 exact grapheme, width, and replacement rules are R15–R17.
 
@@ -135,9 +136,7 @@ branch merges through one PR (constitution Art. XVI). *Rejected:*
 7. tx transactions carry issue work; OpenSpec records each transaction,
    Spec Kit keeps requirements (constitution v1.4.0).
 8. Contract contradictions resolved as R15–R36 (#20, labeled
-   `assumption`). tx slugs must start with a letter, so issue
-   transactions use `i<number>-<slug>` (assumption pending a constitution
-   PATCH; v1.4.0 says `<issue-number>-<slug>`).
+   `assumption`).
 
 ## E. Contract resolutions (issue #20)
 
@@ -159,7 +158,11 @@ grapheme as U+FFFD), so a ZWJ emoji sequence is one grapheme
 which split it. Mc, emoji modifiers, and regional-indicator pairing are
 not extenders (full UAX #29 stays out of scope). Each `ovd_canvas_text`
 call segments its own text: an extender at the start is lone and becomes
-U+FFFD; it never attaches to a cell already on the canvas.
+U+FFFD; it never attaches to a cell already on the canvas. That U+FFFD is
+a base, so extenders after it attach to it: two leading combining marks
+are one U+FFFD grapheme carrying the second mark. A ZWJ that was replaced
+is no longer a ZWJ and joins nothing. A ZWJ sequence longer than 15 bytes
+(a four-person family emoji is 25) becomes one U+FFFD under R17.
 
 **R16 — Grapheme width.** A grapheme's width is its base's: 2 if the
 base's East_Asian_Width is W or F, otherwise 1 (A is narrow, R5).
@@ -195,8 +198,8 @@ grapheme in `text`, saturating at `INT32_MAX`.
 
 **R19 — Cut wide glyphs.** If either half of a wide grapheme would fall
 outside the clip or the canvas, its half that is inside (if any) is drawn
-as a space in the call's style, and the outside half is untouched. This
-covers the left edge, which the spec's edge case omitted. The text still
+as a space in the call's style, and the outside half is untouched except
+for R20's repair. This covers the left edge, which the spec's edge case omitted. The text still
 advances two columns.
 
 **R20 — Pairing beats the clip.** The buffer never holds half of a wide
@@ -209,32 +212,47 @@ missing); leaving the orphan (the diff would emit half a glyph).
 ### Failure semantics
 
 **R21 — Unchanged on failure, with one named exception.** FR-001 holds for
-every function except `ovd_frame_end`, which closes the frame on every
-outcome and, on `OVD_ERROR_IO`, marks the screen unknown. A failed
-`ovd_frame_begin`, including `OVD_ERROR_ALLOCATION` on a resize, opens no
-frame and changes nothing: the old buffers and old size stay, and the
-next begin retries. That is what "keeps working at its old size" means.
+every function and every error except `ovd_frame_end` returning
+`OVD_ERROR_IO`: the frame is closed (as on `OVD_OK`) and the screen is
+marked unknown. `ovd_frame_end`'s other errors (`OVD_ERROR_INVALID_ARGUMENT`,
+`OVD_ERROR_STATE`) change nothing. A failed `ovd_frame_begin` changes
+nothing: a frame that was already open stays open; otherwise no frame
+opens, the old buffers and size stay (`ovd_terminal_size` keeps its value,
+and a pending `ovd_terminal_set_size` stays pending), and the next begin
+retries. That is what "keeps working at its old size" means.
 
 **R22 — Invalid arguments.** Fallible functions return
 `OVD_ERROR_INVALID_ARGUMENT` for nullptr objects or out pointers, for
 non-positive sizes (`ovd_terminal_create` headless, `ovd_terminal_set_size`),
-for out-of-range `OvdBackend`/`OvdColorDepth`, and for an allocator whose
-functions are nullptr. Infallible functions given nullptr do nothing and
-return zero values. Out-of-range values that can't fail are normalized:
-an unknown `OvdColorKind` is the default color, unknown attribute bits
+for out-of-range `OvdBackend`/`OvdColorDepth` (`color_depth` is validated
+even when detection will override it), and for an allocator whose
+functions are nullptr. `headless_size` is validated only for the headless
+backend. Infallible functions given nullptr do nothing and return zero
+values; `ovd_canvas_text` then returns 0. Out-of-range values that can't fail are normalized:
+an unknown `OvdColorKind` is stored, and reads back, as
+`OVD_COLOR_KIND_DEFAULT`; unknown attribute bits
 are dropped, and an unknown `OvdBorder` draws nothing. Cells store
 colors with only their kind's fields set, so equal-looking colors compare
 equal.
 
-**R23 — Closed canvas.** After `ovd_frame_end` or `ovd_frame_abandon`,
-the canvas pointer stays valid until the terminal is destroyed but is
-closed: drawing does nothing, queries return zero values,
-`ovd_canvas_cell` returns false. After `ovd_terminal_destroy`, using it
-is undefined (it cannot be detected without process-wide state).
+**R23 — One canvas per terminal, closed between frames.** The canvas
+object is allocated once, at create, and `ovd_frame_begin` returns the same
+pointer for the terminal's whole life; a resize swaps the cell buffers
+behind it, never the object. So a pointer kept from an earlier frame is
+simply the current canvas again once the next frame opens. Between frames
+the canvas is closed: drawing does nothing, its queries return zero values,
+`ovd_canvas_cell` returns false, and `ovd_canvas_text` returns 0. After
+`ovd_terminal_destroy`, using it is undefined (detecting that would need
+process-wide state).
 
-**R24 — Sink re-entrancy.** While the sink runs, the terminal is busy:
-fallible calls on it return `OVD_ERROR_STATE`, infallible ones do
-nothing, and calling `ovd_terminal_destroy` from the sink is undefined.
+**R24 — Sink re-entrancy.** `ovd_frame_end` closes the canvas before it
+calls the sink, so drawing from inside the sink does nothing. While the
+sink runs, the terminal is busy: fallible calls on it
+(`ovd_frame_begin`, `ovd_frame_end`, `ovd_terminal_set_size`) return
+`OVD_ERROR_STATE`; `ovd_frame_abandon` and `ovd_terminal_invalidate` do
+nothing; the queries `ovd_terminal_size` and `ovd_terminal_color_depth`
+return their real values. Calling `ovd_terminal_destroy` from the sink is
+undefined.
 
 **R25 — Sizes.** A 1×1 terminal works. A system terminal whose size reads
 as 0 in either dimension fails `ovd_frame_begin` (or `ovd_terminal_create`)
@@ -248,9 +266,11 @@ before they change and restored to the values read. Terminal state that
 can only be read back by querying the terminal (which needs input, out of
 scope) is set on exit to its default: `CSI 0 m`, `CSI ? 7 h` (autowrap),
 `CSI ? 25 h` (cursor visible), then `CSI ? 1049 l` if the alternate screen
-was entered. Screen contents and scrollback are preserved only through the
-alternate screen (the default). With `alternate_screen = false` the last
-frame stays on screen and the cursor is left at column 0 of the last row.
+was entered, or else a cursor move to column 0 of the last row of the
+last frame's size. Screen contents and scrollback are preserved only
+through the alternate screen (the default; xterm's mode 1049 saves the
+cursor, switches to the alternate screen, and restores both on leave).
+With `alternate_screen = false` the last frame stays on screen.
 Assumption: before create, the cursor was visible and autowrap on, which
 is the normal shell state.
 
@@ -262,9 +282,11 @@ terminal; otherwise that step is skipped, and is not an error.
 
 **R28 — Order, rollback, best effort.** Create, in order:
 1. require stdout to be a terminal, writing nothing otherwise;
-2. (Windows) enable virtual-terminal output and
-   `DISABLE_NEWLINE_AUTO_RETURN` (failure → `OVD_ERROR_PLATFORM`; no
-   pre-1809 fallback);
+2. (Windows) enable `ENABLE_VIRTUAL_TERMINAL_PROCESSING` and
+   `DISABLE_NEWLINE_AUTO_RETURN` on the output handle (failure →
+   `OVD_ERROR_PLATFORM`; no pre-1809 fallback). Microsoft's SetConsoleMode
+   documentation: the latter makes the console defer the wrap at the last
+   column, as VT terminals do (R33);
 3. (Windows) set the output code page to 65001;
 4. turn off input echo;
 5. read the size;
@@ -273,7 +295,10 @@ terminal; otherwise that step is skipped, and is not an error.
    cursor, autowrap off) in one write.
 
 Each completed step is recorded. A failure undoes the recorded steps in
-reverse and returns the error. Destroy abandons any open frame, writes
+reverse and returns the error. If step 7's write fails, part of the enter
+sequence may have reached the terminal, so the R26 exit sequence is
+written best-effort before undoing steps 4, 3, 2, and create returns
+`OVD_ERROR_IO`. Destroy abandons any open frame, writes
 the R26 exit sequence in one write, then undoes steps 4, 3, 2 in that
 order, and frees. Every undo is attempted even if an earlier one failed;
 destroy cannot report failure.
@@ -287,9 +312,10 @@ and only one may render: their screen models would contradict each other.
 
 **R30 — Output buffer sized to a proven bound.** At create and on resize,
 the output buffer is allocated to the worst-case size of one frame's
-output at that size. That bound is fixed overhead plus cells × (max cursor
-move + max SGR + 15 glyph bytes), computed by the diff module from the
-encodings it emits. `ovd_frame_end` never allocates, so it has no
+output at that size. That bound is fixed overhead (synchronized-output
+markers 16 bytes, full-redraw prefix 8, trailing reset 4) plus cells ×
+(max cursor move + max SGR, with every attribute and two RGB colors + 15
+glyph bytes), computed by the diff module from the encodings it emits. `ovd_frame_end` never allocates, so it has no
 `OVD_ERROR_ALLOCATION` and SC-004 holds for any content. The output module
 refuses appends past capacity. If that ever happens (a bug), the frame
 fails with `OVD_ERROR_IO`, nothing is written, and the next frame is a
@@ -315,20 +341,27 @@ the current buffers; nothing else allocates.
 **R33 — Never rely on autowrap.** After a glyph lands in the last column
 (the terminal's pending-wrap state), the next glyph is always preceded by
 a cursor move. Output therefore renders the same with autowrap on or off,
-and the bottom-right cell never scrolls, given deferred wrap (the VT100
-last-column flag; xterm's control-sequence reference). The system backend
+and the bottom-right cell never scrolls, given deferred wrap: the VT100
+last-column flag, described in xterm's control-sequence reference
+(invisible-island.net/xterm/ctlseqs/ctlseqs.html), and on Windows
+`DISABLE_NEWLINE_AUTO_RETURN` (R28). The system backend
 still turns autowrap off, as defense in depth. The replay interpreter
 models deferred wrap with autowrap on and fails a test that prints in
 pending-wrap state or scrolls. This replaces R8's "autowrap is off, so
 the bottom-right cell is safe", which made FR-024 depend on autowrap.
 
-**R34 — Frame output framing.**
-- A full redraw starts with `CSI 0 m` and `CSI 2 J`, then writes only
-  non-default cells.
-- Every non-empty output ends with `CSI 0 m`.
-- With `synchronized_output`, the output is wrapped in `CSI ? 2026 h` …
-  `CSI ? 2026 l`.
-- An unchanged frame writes nothing.
+**R34 — Frame output framing.** A non-empty output is, in this order:
+1. `CSI ? 2026 h`, only with `synchronized_output`;
+2. for a full redraw, `CSI 0 m` `CSI 2 J`;
+3. the cell updates (a full redraw writes only non-default cells);
+4. `CSI 0 m`;
+5. `CSI ? 2026 l`, only with `synchronized_output`.
+
+An unchanged frame writes nothing at all. Mode 2026 is the synchronized
+output convention proposed for terminal emulators
+(gist.github.com/christianparpart/d8a62cc1ab659194337d73e399004036);
+terminals without it ignore an unknown DEC private mode, per ECMA-48's
+handling of unrecognized controls.
 - "Single write" (FR-022) means one contiguous buffer: one sink call
   (headless), or one write loop with nothing interleaved (system).
 
@@ -347,3 +380,10 @@ Defaults: `color_depth` TRUECOLOR, `headless_size` 80×24.
 **R36 — Color detection precision.** R10's rules apply first-match in the
 order listed. `NO_COLOR` counts when present and non-empty (no-color.org).
 `COLORTERM` matches `truecolor` or `24bit` exactly.
+
+**Unverified (Art. X).** The terminal behaviors §E relies on are taken from
+the cited documentation, not observed: deferred wrap (R33), mode 1049
+saving and restoring the screen (R26), terminals ignoring mode 2026 when
+unsupported (R34), and the Windows console modes (R28). They are checked
+by hand in real terminals through the manual checklist (OVD-12), and any
+difference found becomes a spec change.

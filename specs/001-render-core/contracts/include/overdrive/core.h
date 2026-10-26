@@ -45,7 +45,8 @@ OVD_API OvdVersion ovd_version(void);
 
 /* Every fallible public function returns an OvdResult. On anything but
  * OVD_OK, out parameters are left unchanged and no state was modified.
- * The one exception is ovd_frame_end, whose comment says what it changes.
+ * The one exception is ovd_frame_end returning OVD_ERROR_IO; its comment
+ * says what it changes.
  *
  * nullptr: a fallible function given a nullptr object or out pointer
  * returns OVD_ERROR_INVALID_ARGUMENT. A function that cannot fail does
