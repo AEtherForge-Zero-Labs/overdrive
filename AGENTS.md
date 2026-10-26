@@ -174,9 +174,15 @@ PR, date, or temporary state in them; use conditions and placeholders
 <why, not what — wrap at 72>
 
 Refs #<number>
+
 Assisted-by: AGENT_NAME:MODEL_VERSION [TOOL…]
 Co-Authored-By: <the tool's own co-author line, if it adds one>
 ```
+
+The trailers are the last paragraph, alone. `Refs #<number>` is not a
+trailer (no colon), and git ignores a final paragraph that mixes it with
+trailers, so the guard would see no disclosure. Check with
+`git log -1 --format=%B | git interpret-trailers --parse`.
 
 - Conventional Commits. `type` is one of `feat`, `fix`, `docs`, `build`,
   `ci`, `test`, `refactor`, `perf`, `chore`; `scope` is the module
