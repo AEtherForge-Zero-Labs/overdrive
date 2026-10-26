@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-26
 
-**Status**: Approved for implementation (constitution v1.4.1; contracts
+**Status**: Approved for implementation (constitution v1.4.2; contracts
 revised by #20, decisions R15–R36 in research.md)
 
 **Input**: "Prepare a specification for the rendering engine and its minimum
@@ -144,8 +144,10 @@ required for correctness.
 - Text containing ESC, other C0/C1 controls, DEL, newline, tab, NUL,
   U+2028/U+2029, or a bidi control: each is drawn as U+FFFD; no control
   sequence reaches the output (R17).
-- Invalid or truncated UTF-8: each maximal invalid subsequence is one
-  U+FFFD.
+- Invalid or truncated UTF-8: each maximal subpart of an ill-formed
+  subsequence is one U+FFFD (Unicode Standard, Ch. 3, "U+FFFD
+  Substitution of Maximal Subparts"): `F0 80 80` gives three, the
+  truncated `F0 9F 98` gives one (R17).
 - A wide glyph with either half outside the clip or the canvas (left or
   right): the half inside is drawn as a space; the text still advances
   two columns (R19).
@@ -153,6 +155,9 @@ required for correctness.
   in its own style, even when that half is outside the clip (R20).
 - An extender (combining mark, ZWJ, variation selector, format
   character) at the start of text: drawn as U+FFFD (R15).
+- Extenders after a U+FFFD attach to it: the cell holds U+FFFD followed
+  by them, within the 15-byte limit, so two leading combining marks are
+  one U+FFFD cell carrying the second (R15, R17).
 - A grapheme longer than the cell's storage: drawn as U+FFFD, width 1.
 - Rectangles with zero or negative size, or entirely off-canvas: no-op.
 - Any `int32_t` coordinates or sizes, including extremes: no overflow;
@@ -169,8 +174,14 @@ required for correctness.
   size; the next begin retries (R21).
 - nullptr arguments: fallible calls return `OVD_ERROR_INVALID_ARGUMENT`;
   infallible ones do nothing and return zero values (R22).
-- Drawing on the canvas after its frame ended: no effect (R23).
-- The sink calling back into its own terminal: `OVD_ERROR_STATE` (R24).
+- Drawing on the canvas after its frame ended: no effect;
+  `ovd_canvas_text` returns 0 and `ovd_canvas_set_clip` stores nothing
+  and returns `{0, 0, 0, 0}` (R23).
+- The sink calling back into its own terminal: begin, end, and set_size
+  return `OVD_ERROR_STATE`; the canvas is already closed; size and color
+  depth queries return their normal values (R24).
+- A failed `ovd_frame_begin`: `ovd_terminal_size` is unchanged, and a
+  pending headless `ovd_terminal_set_size` stays pending (R21).
 - stdin not a terminal (system backend): the echo step is skipped (R27).
 - A restore step failing at destroy: the remaining steps still run (R28).
 - `ovd_frame_begin` twice, `ovd_frame_end` without begin: `OVD_ERROR_STATE`.

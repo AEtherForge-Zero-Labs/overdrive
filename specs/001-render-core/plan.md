@@ -34,7 +34,7 @@ one write per frame; no process-wide state
 
 ## Constitution Check
 
-*Gate against constitution v1.4.1. Re-checked after design and after the #20 contract resolutions (research R15–R36).*
+*Gate against constitution v1.4.2. Re-checked after design and after the #20 contract resolutions (research R15–R36).*
 
 | Article | Gate | Status |
 |---|---|---|

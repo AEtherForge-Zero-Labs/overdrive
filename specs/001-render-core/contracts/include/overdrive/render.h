@@ -140,10 +140,13 @@ OVD_API void ovd_frame_abandon(OvdTerminal *terminal);
  * becomes a space in its own style even if it lies outside the clip, so
  * the canvas never holds half a glyph.
  *
- * Between frames the canvas is closed: drawing does nothing, queries
- * return zero values, and ovd_canvas_text returns 0. The next
- * ovd_frame_begin reopens the same canvas. Using it after
- * ovd_terminal_destroy is undefined. nullptr does nothing. */
+ * Between frames the canvas is closed, including while the terminal's
+ * sink runs: drawing does nothing, ovd_canvas_size and ovd_canvas_clip
+ * return zero values, ovd_canvas_cell returns false, ovd_canvas_text
+ * returns 0, and ovd_canvas_set_clip stores nothing and returns
+ * {0, 0, 0, 0}. The next ovd_frame_begin reopens the same canvas. Using
+ * it after ovd_terminal_destroy is undefined. A nullptr canvas behaves
+ * as a closed one. */
 
 OVD_API OvdSize ovd_canvas_size(const OvdCanvas *canvas);
 
@@ -165,21 +168,24 @@ OVD_API void ovd_canvas_fill(OvdCanvas *canvas, OvdRect area, OvdStyle style);
  *
  * A grapheme is a base code point plus any following combining marks
  * (Mn, Me), format characters (Cf, except bidi controls), variation
- * selectors, and, after a ZWJ, the next code point unless it is one of
- * the replaced kinds below. Its width is its
- * base's: 2 for East Asian Width W or F, otherwise 1; what follows the
- * base never changes it. Segmentation restarts with each call. A U+FFFD
- * produced below is a base: extenders after it attach to it, and a
- * replaced ZWJ joins nothing.
+ * selectors, and, after a ZWJ, the next code point unless it is
+ * replaced (invalid UTF-8, a control, U+2028/9, or a bidi control). Its
+ * width is its base's: 2 for East Asian Width W or F, otherwise 1; what
+ * follows the base never changes it. Segmentation restarts with each
+ * call. A U+FFFD produced below is a base: extenders that follow it
+ * attach to it, and the cell's text is U+FFFD followed by them (the
+ * 15-byte limit still applies). A replaced ZWJ joins nothing.
  *
  * Text is untrusted. Each of these is drawn as one U+FFFD of width 1:
- * every maximal invalid UTF-8 subsequence; C0 controls (including NUL,
- * newline, and tab), DEL, and C1 controls; U+2028 and U+2029; bidi
- * controls; an extender with no base before it in text; and a whole
- * grapheme longer than 15 bytes. Nothing in text reaches the terminal as a
- * control sequence. A wide grapheme with either half outside the clip or
- * the canvas has its inside half drawn as a space in style, and still
- * advances two columns. */
+ * each maximal subpart of an ill-formed UTF-8 subsequence, including one
+ * truncated by length (Unicode Standard, Ch. 3, "U+FFFD Substitution of
+ * Maximal Subparts": F0 80 80 gives three, F0 9F 98 gives one); C0
+ * controls (including NUL, newline, and tab), DEL, and C1 controls;
+ * U+2028 and U+2029; bidi controls; an extender with no base before it in
+ * text; and a whole grapheme longer than 15 bytes. Nothing in text
+ * reaches the terminal as a control sequence. A wide grapheme with either
+ * half outside the clip or the canvas has its inside half drawn as a
+ * space in style, and still advances two columns. */
 OVD_API int32_t ovd_canvas_text(OvdCanvas *canvas, int32_t x, int32_t y,
                                 const char *text, size_t length, OvdStyle style);
 

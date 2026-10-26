@@ -42,9 +42,11 @@ typedef enum OvdBackend : uint8_t {
  *
  * While the sink runs, its terminal is busy: ovd_frame_begin,
  * ovd_frame_end, and ovd_terminal_set_size return OVD_ERROR_STATE;
- * ovd_frame_abandon, ovd_terminal_invalidate, and drawing do nothing;
- * ovd_terminal_size and ovd_terminal_color_depth return their real values.
- * Calling ovd_terminal_destroy on it from the sink is undefined. */
+ * ovd_frame_abandon and ovd_terminal_invalidate do nothing; the
+ * terminal's canvas is already closed, so ovd_canvas_* calls on it act as
+ * on a closed canvas (render.h); ovd_terminal_size and
+ * ovd_terminal_color_depth return their normal values. Calling
+ * ovd_terminal_destroy on it from the sink is undefined. */
 typedef bool (*OvdSink)(void *context, const char *bytes, size_t length);
 
 /* Optional replacement for the C library allocator. Overdrive allocates
@@ -95,8 +97,8 @@ typedef struct OvdTerminalConfig {
     OvdSink sink;
     void *sink_context;
 
-    /* nullptr selects malloc/free. Copied at create; the
-     * functions and context must outlive the terminal. */
+    /* nullptr selects malloc and free. Copied at create; the functions
+     * and context must outlive the terminal. */
     const OvdAllocator *allocator;
 } OvdTerminalConfig;
 
@@ -105,14 +107,13 @@ OVD_API OvdTerminalConfig ovd_terminal_config_default(void);
 /* Acquires the terminal. For the system backend, in this order: requires
  * stdout to be a terminal (writing nothing otherwise); on Windows, enables
  * virtual-terminal output with DISABLE_NEWLINE_AUTO_RETURN and sets the
- * UTF-8 output code page; turns off
- * input echo if stdin is a terminal (skipped, not an error, if it is not);
- * reads the size; allocates; then, in one write, enters the alternate
- * screen if requested, hides the cursor, and disables autowrap. Each
- * operating-system mode is read before it is changed, so destroy can
- * restore it. Input is not read in this version. The headless backend
- * changes no modes and writes nothing. Either backend allocates its one
- * canvas here.
+ * UTF-8 output code page; turns off input echo if stdin is a terminal
+ * (skipped, not an error, if it is not); reads the size; allocates; then,
+ * in one write, enters the alternate screen if requested, hides the
+ * cursor, and disables autowrap. Each operating-system mode is read
+ * before it is changed, so destroy can restore it. Input is not read in
+ * this version. The headless backend changes no modes and writes nothing.
+ * Either backend allocates its one canvas here.
  *
  * Fails with OVD_ERROR_NOT_A_TERMINAL if stdout is not a terminal;
  * OVD_ERROR_INVALID_ARGUMENT for nullptr arguments, an out-of-range
@@ -139,8 +140,12 @@ OVD_API OvdTerminalConfig ovd_terminal_config_default(void);
  * without calling it, the terminal stays as create left it. */
 OVD_API void ovd_terminal_destroy(OvdTerminal *terminal);
 
-/* The size the next frame will have as of the last check: create, the
- * last ovd_frame_begin, or ovd_terminal_set_size. */
+/* The size of the terminal's current buffers (set at create and by each
+ * ovd_frame_begin that succeeds), or, if ovd_terminal_set_size has stored
+ * a size no begin has applied yet, that pending size. A failed
+ * ovd_frame_begin changes neither: the pending size is kept and returned
+ * until a begin applies it. The system backend does not re-read the size
+ * here; the next ovd_frame_begin does. */
 OVD_API OvdSize ovd_terminal_size(const OvdTerminal *terminal);
 
 OVD_API OvdColorDepth ovd_terminal_color_depth(const OvdTerminal *terminal);

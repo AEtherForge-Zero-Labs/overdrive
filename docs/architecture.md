@@ -48,7 +48,7 @@ sequenceDiagram
     participant D as diff
     participant S as sink / console
     App->>T: ovd_frame_begin
-    T->>T: re-read size (resize → allocate new, release old, mark screen unknown)
+    T->>T: re-read size (resize → reallocate, mark screen unknown)
     T->>C: clear to default cells, clip = whole canvas
     T-->>App: canvas
     App->>C: fill / text / box …
@@ -73,8 +73,7 @@ sequenceDiagram
   U+FFFD before they reach a cell, so caller text can never become a
   control sequence.
 - **Output.** A fixed subset of ECMA-48/xterm sequences (research R7),
-  never relying on autowrap (it is also off for the session, R33), one
-  write per frame.
+  autowrap off for the session, one write per frame.
 - **Color.** Default, indexed, or RGB per cell; downsampled at output time
   to the terminal's depth (R9, R10).
 
@@ -83,8 +82,8 @@ sequenceDiagram
 | Object | Owner | Lifetime |
 |---|---|---|
 | `OvdTerminal` | caller (`create`/`destroy`) | until destroy |
-| `OvdCanvas` | terminal | create → destroy; one per terminal, open only from `frame_begin` to `frame_end`/`abandon` (research R23) |
-| cell buffers, output buffer | terminal | allocated at create and on resize only; output sized to the worst-case frame (research R30) |
+| `OvdCanvas` | terminal | `frame_begin` → `frame_end`/`abandon` |
+| cell buffers, output buffer | terminal | reallocated only on resize/growth |
 | `OvdCellView.text` | canvas | until next draw or frame end |
 | sink, allocator callbacks | caller | must outlive the terminal |
 

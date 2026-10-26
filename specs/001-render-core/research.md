@@ -137,6 +137,8 @@ branch merges through one PR (constitution Art. XVI). *Rejected:*
    Spec Kit keeps requirements (constitution v1.4.0).
 8. Contract contradictions resolved as R15–R36 (#20, labeled
    `assumption`).
+9. Issue transactions use `i<number>-<slug>` (constitution v1.4.2,
+   Art. XVI).
 
 ## E. Contract resolutions (issue #20)
 
@@ -156,13 +158,22 @@ is also part of the grapheme unless R17 replaces it (then it starts a new
 grapheme as U+FFFD), so a ZWJ emoji sequence is one grapheme
 (spec Assumptions); R5 said "base + trailing zero-width code points",
 which split it. Mc, emoji modifiers, and regional-indicator pairing are
-not extenders (full UAX #29 stays out of scope). Each `ovd_canvas_text`
+not extenders (full UAX #29 stays out of scope). Two named deviations
+from UAX #29 follow: there, most Cf code points (for example U+00AD and
+U+200B) are Control and break, and Prepend marks (U+0600–U+0605) attach
+to what follows; here every non-bidi Cf is an extender, so they attach to
+the base before them. Unassigned code points are bases, with width from
+`EastAsianWidth.txt` including its `@missing` defaults (W in the CJK
+ideograph ranges). These UAX #29 and UCD properties are as recalled;
+OVD-03 checks them against the pinned UCD. Each `ovd_canvas_text`
 call segments its own text: an extender at the start is lone and becomes
 U+FFFD; it never attaches to a cell already on the canvas. That U+FFFD is
-a base, so extenders after it attach to it: two leading combining marks
-are one U+FFFD grapheme carrying the second mark. A ZWJ that was replaced
-is no longer a ZWJ and joins nothing. A ZWJ sequence longer than 15 bytes
-(a four-person family emoji is 25) becomes one U+FFFD under R17.
+a base, so extenders after it attach to it, and the cell's text is
+U+FFFD followed by them (the 15-byte limit still applies): two leading
+combining marks are one U+FFFD grapheme carrying the second mark. A ZWJ
+that was replaced is no longer a ZWJ and joins nothing. A ZWJ sequence
+longer than 15 bytes (a four-person family emoji is 25) becomes one
+U+FFFD under R17.
 
 **R16 — Grapheme width.** A grapheme's width is its base's: 2 if the
 base's East_Asian_Width is W or F, otherwise 1 (A is narrow, R5).
@@ -175,7 +186,10 @@ base like any other (following extenders attach to it):
 - every maximal subpart of an ill-formed UTF-8 sequence (Unicode Standard,
   Chapter 3, "U+FFFD Substitution of Maximal Subparts"), including
   surrogates, overlongs, values above U+10FFFF, and a sequence truncated
-  by `length`;
+  by `length`. `F0 80 80` and `ED A0 80` each give three U+FFFD (no
+  valid sequence starts `F0 80` or `ED A0`); the truncated valid prefix
+  `F0 9F 98` gives one. The count matters: it sets the column advance
+  and `ovd_canvas_text`'s return value;
 - C0 (U+0000–U+001F, including NUL, which does not terminate text), DEL,
   and C1 (U+0080–U+009F);
 - U+2028 and U+2029;
@@ -217,9 +231,12 @@ every function and every error except `ovd_frame_end` returning
 marked unknown. `ovd_frame_end`'s other errors (`OVD_ERROR_INVALID_ARGUMENT`,
 `OVD_ERROR_STATE`) change nothing. A failed `ovd_frame_begin` changes
 nothing: a frame that was already open stays open; otherwise no frame
-opens, the old buffers and size stay (`ovd_terminal_size` keeps its value,
-and a pending `ovd_terminal_set_size` stays pending), and the next begin
-retries. That is what "keeps working at its old size" means.
+opens, the old buffers and size stay, and the next begin retries. That
+is what "keeps working at its old size" means. `ovd_terminal_size`
+returns the size of the current buffers, or a size stored by
+`ovd_terminal_set_size` that no begin has applied yet; a failed begin
+changes neither, so a pending headless size survives it and is returned
+until a begin applies it.
 
 **R22 — Invalid arguments.** Fallible functions return
 `OVD_ERROR_INVALID_ARGUMENT` for nullptr objects or out pointers, for
@@ -241,17 +258,20 @@ pointer for the terminal's whole life; a resize swaps the cell buffers
 behind it, never the object. So a pointer kept from an earlier frame is
 simply the current canvas again once the next frame opens. Between frames
 the canvas is closed: drawing does nothing, its queries return zero values,
-`ovd_canvas_cell` returns false, and `ovd_canvas_text` returns 0. After
+`ovd_canvas_cell` returns false, `ovd_canvas_text` returns 0, and
+`ovd_canvas_set_clip` stores nothing and returns `{0, 0, 0, 0}`. A
+nullptr canvas behaves the same (R22). After
 `ovd_terminal_destroy`, using it is undefined (detecting that would need
 process-wide state).
 
 **R24 — Sink re-entrancy.** `ovd_frame_end` closes the canvas before it
-calls the sink, so drawing from inside the sink does nothing. While the
+calls the sink, so every `ovd_canvas_*` call from inside the sink acts as
+on a closed canvas (R23). While the
 sink runs, the terminal is busy: fallible calls on it
 (`ovd_frame_begin`, `ovd_frame_end`, `ovd_terminal_set_size`) return
 `OVD_ERROR_STATE`; `ovd_frame_abandon` and `ovd_terminal_invalidate` do
 nothing; the queries `ovd_terminal_size` and `ovd_terminal_color_depth`
-return their real values. Calling `ovd_terminal_destroy` from the sink is
+return their normal values. Calling `ovd_terminal_destroy` from the sink is
 undefined.
 
 **R25 — Sizes.** A 1×1 terminal works. A system terminal whose size reads

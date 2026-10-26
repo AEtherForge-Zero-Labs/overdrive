@@ -29,7 +29,7 @@ Every behavior task is preceded by its test task, which must be seen failing.
 ### OVD-03 Unicode [P]
 - [ ] T012 [P] Vendor UCD `EastAsianWidth.txt` and `DerivedGeneralCategory.txt` for the pinned version into `third_party/ucd/` with the Unicode license
 - [ ] T013 [P] Write `cmake/gen_unicode_tables.cmake` generating range tables into the build tree (Art. II); wire it from `CMakeLists.txt` (append-only block)
-- [ ] T014 [P] [US1] Write `tests/test_unicode.c`: ASCII, CJK (width 2), combining marks, ZWJ emoji sequence, VS16, invalid/truncated UTF-8 → one U+FFFD per maximal subsequence, every C0/C1/DEL → U+FFFD, lone combining mark → U+FFFD, >15-byte grapheme → U+FFFD (whole grapheme, width 1), NUL, U+2028/9, bidi controls → U+FFFD, ZWJ sequence = one grapheme of its base's width, extenders after a U+FFFD attach to it, two leading marks → one U+FFFD carrying the second, leading ZWJ → U+FFFD joining nothing, four-person family emoji (25 bytes) → one U+FFFD (R15–R17)
+- [ ] T014 [P] [US1] Write `tests/test_unicode.c`: ASCII, CJK (width 2), combining marks, ZWJ emoji sequence, VS16, invalid/truncated UTF-8 → one U+FFFD per maximal subpart (`F0 80 80` → 3 × U+FFFD, `ED A0 80` → 3 × U+FFFD, `F0 9F 98` → 1 × U+FFFD, each also checked through the return value), every C0/C1/DEL → U+FFFD, lone combining mark → U+FFFD, >15-byte grapheme → U+FFFD (whole grapheme, width 1), NUL, U+2028/9, bidi controls → U+FFFD, ZWJ sequence = one grapheme of its base's width, extenders after a U+FFFD attach to it, two leading marks → one U+FFFD carrying the second, leading ZWJ → U+FFFD joining nothing, four-person family emoji (25 bytes) → one U+FFFD (R15–R17)
 - [ ] T015 [P] [US1] Implement `src/unicode.h`/`src/unicode.c`: next-grapheme iterator returning bytes, width, and replacement flag (R15–R17)
 
 ### OVD-04 Allocation and output buffer [P]
@@ -49,7 +49,7 @@ Every behavior task is preceded by its test task, which must be seen failing.
 ## Phase 2 — Canvas (depends on OVD-03, OVD-04)
 
 ### OVD-07 Cell buffer and canvas
-- [ ] T024 [US1] Write `tests/test_canvas.c`: fill, clip set/restore, text advance, clipping, wide glyph at right edge/clip, overwriting halves of a wide glyph incl. the other half outside the clip (R20), first half outside clip or left edge (R19), cell read-back, negative and zero rects, INT32_MIN/MAX coordinates (R18), closed canvas and nullptr (R22, R23), color normalization
+- [ ] T024 [US1] Write `tests/test_canvas.c`: fill, clip set/restore, text advance, clipping, wide glyph at right edge/clip, overwriting halves of a wide glyph incl. the other half outside the clip (R20), first half outside clip or left edge (R19), cell read-back, negative and zero rects, INT32_MIN/MAX coordinates (R18), closed canvas and nullptr: drawing no-op, `ovd_canvas_text` → 0, `ovd_canvas_set_clip` stores nothing and → {0,0,0,0}, `ovd_canvas_cell` → false (R22, R23), color normalization
 - [ ] T025 [US1] Implement `src/buffer.h`/`src/buffer.c` (`OvdBuffer` grid, resize via allocator, wide-glyph pairing invariant)
 - [ ] T026 [US1] Implement `src/canvas.c` (`ovd_canvas_size`, `_clip`, `_set_clip`, `_fill`, `_text`, `_cell`)
 
@@ -66,7 +66,7 @@ Every behavior task is preceded by its test task, which must be seen failing.
 ## Phase 4 — Terminal and frames
 
 ### OVD-10 Headless terminal and frame API (depends on OVD-04, OVD-07, OVD-08)
-- [ ] T031 [US1] Write `tests/test_terminal.c`: config defaults; create/destroy headless; frame state machine errors; set_size + resize full redraw; invalidate; sink failure → `OVD_ERROR_IO` then full redraw; destroy with open frame; two terminals at once (FR-002); allocation failure at create and at resize leaves state intact (R21, R31); sink re-entrancy → OVD_ERROR_STATE (R24); headless ignores the environment (R35); set_size and create argument validation (R22)
+- [ ] T031 [US1] Write `tests/test_terminal.c`: config defaults; create/destroy headless; frame state machine errors; set_size + resize full redraw; invalidate; sink failure → `OVD_ERROR_IO` then full redraw; destroy with open frame; two terminals at once (FR-002); allocation failure at create and at resize leaves state intact (R21, R31); sink re-entrancy: begin/end/set_size → OVD_ERROR_STATE, abandon/invalidate no-op, canvas calls act as closed, size and color depth normal (R24); failed begin keeps `ovd_terminal_size` and a pending set_size, applied by the next successful begin (R21); headless ignores the environment (R35); set_size and create argument validation (R22)
 - [ ] T032 [US1] Implement `src/terminal.c` and `src/internal.h` (headless backend, frame begin/end/abandon, one write per frame, optional sync markers)
 
 ### OVD-11 System backend (depends on OVD-06, OVD-10)
