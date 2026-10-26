@@ -19,9 +19,14 @@
       "Bash(git push --force*)",
       "Bash(git push -f*)",
       "Bash(git push --force-with-lease*)",
-      "Bash(git push --tags*)"
+      "Bash(git push --tags*)",
+      "Edit(//**/.claude/hooks/**)",
+      "Edit(//**/.claude/settings.json)",
+      "Edit(//**/.claude/settings.local.json)",
+      "Read(~/.config/gh/hosts.yml)"
     ]
   },
+  "disableAllHooks": false,
   "model": "opus[1m]",
   "hooks": {
     "PreToolUse": [
@@ -32,6 +37,7 @@
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard.sh",
             "timeout": 20,
+            "onFailure": "block",
             "statusMessage": "Checking repo rules"
           }
         ]
