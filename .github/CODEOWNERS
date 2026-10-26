@@ -1,0 +1,14 @@
+# Default owner for everything; add per-area owners as contributors join.
+*                                   @NeonSupernova
+
+# Governance: constitution amendments are ratified by the owner (Governance).
+/.specify/memory/                   @NeonSupernova
+/AGENTS.md                          @NeonSupernova
+/CLAUDE.md                          @NeonSupernova
+/.claude/                           @NeonSupernova
+/.agents/                           @NeonSupernova
+/.github/                           @NeonSupernova
+/docs/identity/                     @NeonSupernova
+
+# Public API: every change here is a contract change (Arts. I, XIV).
+/include/overdrive/                 @NeonSupernova

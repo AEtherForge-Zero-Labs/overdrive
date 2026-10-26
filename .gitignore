@@ -1,0 +1,38 @@
+# Build output (any depth)
+target/
+node_modules/
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+.build/
+
+# Secrets and local state — never commit
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.db
+*.db-shm
+*.db-wal
+trust.txt
+providers.toml
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Machine-local agent logs
+.claude/logs/
+
+# CMake
+CMakeUserPresets.json
+cmake-build-*/
+compile_commands.json
+.cache/

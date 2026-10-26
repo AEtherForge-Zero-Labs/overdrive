@@ -1,0 +1,107 @@
+{
+  "schema": "overdrive-workgraph/1",
+  "feature": "001-render-core",
+  "spec": "specs/001-render-core/spec.md",
+  "contracts": "specs/001-render-core/contracts/include/overdrive/",
+  "protocol": "docs/process/swarm.md",
+  "shared_append_only": [
+    "CMakeLists.txt",
+    "tests/CMakeLists.txt"
+  ],
+  "frozen_after": {
+    "include/overdrive/": "OVD-01"
+  },
+  "issues": [
+    {
+      "id": "OVD-01", "title": "Build skeleton, CI, public headers, core",
+      "phase": 0, "tasks": ["T001","T002","T003","T004","T005","T006","T007","T008","T009"],
+      "depends_on": [],
+      "owns": ["CMakeLists.txt","CMakePresets.json","cmake/check_exports.cmake","include/overdrive/","src/core.c","tests/CMakeLists.txt","tests/test_core.c","tests/test_headers.c",".github/workflows/ci.yml"],
+      "requirements": ["FR-001","FR-003","FR-040","FR-041","SC-005","SC-006"],
+      "proof": ["cmake --preset debug","cmake --build --preset debug","ctest --preset debug","cmake --preset debug-clang && cmake --build --preset debug-clang && ctest --preset debug-clang"],
+      "tier": "opus", "human_gate": "contract freeze: owner approves include/overdrive/ before merge"
+    },
+    {
+      "id": "OVD-02", "title": "Color downsampling and SGR encoding",
+      "phase": 1, "tasks": ["T010","T011"], "depends_on": ["OVD-01"],
+      "owns": ["src/color.h","src/color.c","tests/test_color.c"],
+      "requirements": ["FR-023"], "proof": ["ctest --preset debug -R test_color"], "tier": "sonnet"
+    },
+    {
+      "id": "OVD-03", "title": "Unicode decoding, segmentation, and width",
+      "phase": 1, "tasks": ["T012","T013","T014","T015"], "depends_on": ["OVD-01"],
+      "owns": ["third_party/ucd/","cmake/gen_unicode_tables.cmake","src/unicode.h","src/unicode.c","tests/test_unicode.c"],
+      "requirements": ["FR-031","FR-032"], "proof": ["ctest --preset debug -R test_unicode"], "tier": "opus",
+      "open_decision": "Unicode version pin (research R5)"
+    },
+    {
+      "id": "OVD-04", "title": "Allocator hook and output buffer",
+      "phase": 1, "tasks": ["T016","T017"], "depends_on": ["OVD-01"],
+      "owns": ["src/alloc.h","src/alloc.c","src/output.h","src/output.c","tests/support/test_alloc.h","tests/support/test_alloc.c","tests/test_alloc.c"],
+      "requirements": ["FR-022"], "proof": ["ctest --preset debug -R test_alloc"], "tier": "sonnet"
+    },
+    {
+      "id": "OVD-05", "title": "VT replay interpreter (test support)",
+      "phase": 1, "tasks": ["T018","T019"], "depends_on": ["OVD-01"],
+      "owns": ["tests/support/vt_replay.h","tests/support/vt_replay.c","tests/support/screen.h","tests/support/screen.c","tests/test_vt_replay.c"],
+      "requirements": ["SC-001"], "proof": ["ctest --preset debug -R test_vt_replay"], "tier": "opus"
+    },
+    {
+      "id": "OVD-06", "title": "Platform layer and color detection",
+      "phase": 1, "tasks": ["T020","T021","T022","T023"], "depends_on": ["OVD-01"],
+      "owns": ["src/platform/","src/detect.c","src/detect.h","tests/test_detect.c"],
+      "requirements": ["FR-010","FR-011","FR-013"], "proof": ["ctest --preset debug -R test_detect","cmake --build --preset windows-cross-debug"], "tier": "opus",
+      "unverifiable_by_agent": "behavior in Windows Terminal; report as UNVERIFIED"
+    },
+    {
+      "id": "OVD-07", "title": "Cell buffer and canvas",
+      "phase": 2, "tasks": ["T024","T025","T026"], "depends_on": ["OVD-03","OVD-04"],
+      "owns": ["src/buffer.h","src/buffer.c","src/canvas.c","tests/test_canvas.c"],
+      "requirements": ["FR-030","FR-031","FR-032","FR-033"], "proof": ["ctest --preset debug -R test_canvas"], "tier": "opus"
+    },
+    {
+      "id": "OVD-08", "title": "Differential renderer",
+      "phase": 3, "tasks": ["T027","T028"], "depends_on": ["OVD-02","OVD-04","OVD-05","OVD-07"],
+      "owns": ["src/diff.h","src/diff.c","tests/test_diff.c"],
+      "requirements": ["FR-020","FR-021","FR-024","FR-025","SC-001","SC-002","SC-003"], "proof": ["ctest --preset debug -R test_diff"], "tier": "opus"
+    },
+    {
+      "id": "OVD-09", "title": "Box drawing",
+      "phase": 3, "tasks": ["T029","T030"], "depends_on": ["OVD-07"],
+      "owns": ["src/box.c","tests/test_box.c"],
+      "requirements": ["FR-034"], "proof": ["ctest --preset debug -R test_box"], "tier": "sonnet"
+    },
+    {
+      "id": "OVD-10", "title": "Headless terminal and frame API",
+      "phase": 4, "tasks": ["T031","T032"], "depends_on": ["OVD-04","OVD-07","OVD-08"],
+      "owns": ["src/terminal.c","src/internal.h","tests/test_terminal.c"],
+      "requirements": ["FR-002","FR-012","FR-014","FR-022","FR-025","FR-026"], "proof": ["ctest --preset debug -R test_terminal"], "tier": "opus"
+    },
+    {
+      "id": "OVD-11", "title": "System backend wiring",
+      "phase": 4, "tasks": ["T033","T034"], "depends_on": ["OVD-06","OVD-10"],
+      "owns": ["src/terminal_system.c","tests/test_system_notty.c"],
+      "requirements": ["FR-010","FR-011","FR-014"], "proof": ["ctest --preset debug -R test_system_notty","ctest --preset windows-cross-debug"], "tier": "opus",
+      "unverifiable_by_agent": "restoration in Windows Terminal and a POSIX terminal; human runs docs/validation/manual-checklist.md"
+    },
+    {
+      "id": "OVD-13", "title": "Benchmark and steady-state allocation test",
+      "phase": 4, "tasks": ["T035","T036"], "depends_on": ["OVD-10"],
+      "owns": ["bench/","tests/test_steady_state.c"],
+      "requirements": ["SC-003","SC-004","SC-008"], "proof": ["ctest --preset debug -R test_steady_state","cmake --build --preset bench"], "tier": "sonnet"
+    },
+    {
+      "id": "OVD-12", "title": "hello_overdrive example and manual validation checklist",
+      "phase": 5, "tasks": ["T037","T038"], "depends_on": ["OVD-09","OVD-11"],
+      "owns": ["examples/","docs/validation/manual-checklist.md"],
+      "requirements": ["SC-007"], "proof": ["cmake --build --preset debug --target hello_overdrive"], "tier": "sonnet",
+      "human_gate": "owner runs the manual checklist in Windows Terminal and one POSIX terminal"
+    },
+    {
+      "id": "OVD-14", "title": "Document the implemented state",
+      "phase": 5, "tasks": ["T039","T040"], "depends_on": ["OVD-11","OVD-13"],
+      "owns": ["docs/architecture.md","docs/compatibility.md","README.md"],
+      "requirements": ["Art. XV"], "proof": ["review against measured benchmark output"], "tier": "sonnet"
+    }
+  ]
+}
