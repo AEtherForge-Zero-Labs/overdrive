@@ -15,4 +15,4 @@
 - [x] 3.1 Add compiler/platform CI with the ci-ok aggregate (T008).
 - [x] 3.2 Run debug, release, debug-clang, shared, and cross presets.
 - [x] 3.3 Check header copies, full diff, and transaction validation.
-- [ ] 3.4 Publish the PR with evidence and explicit unverified areas.
+- [x] 3.4 Publish the PR with evidence and explicit unverified areas.
