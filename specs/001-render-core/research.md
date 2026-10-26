@@ -356,6 +356,25 @@ never nullptr. Size computations are overflow-checked; overflow is
 `ovd_terminal_create` and in an `ovd_frame_begin` whose size differs from
 the current buffers; nothing else allocates.
 
+**R37 — Allocation dispatch and output buffer (OVD-04).** Assumptions
+where R30–R32 are silent, labeled `assumption`. The issue body's "output
+buffer grows geometrically" predates R30/R31 and is not implemented: the
+buffer never grows.
+- A zero element count or element size is `OVD_ERROR_INVALID_ARGUMENT`
+  with no allocator call (a caller bug; `allocate` never sees 0).
+- A batch checks every request's size before its first allocator call;
+  on a refusal it releases what it took in reverse order and leaves every
+  output block empty.
+- R31's allocate-then-release is a batch allocation of all new blocks,
+  then each owner adopting its new block and releasing its old one. No
+  callback interface (Art. VII).
+- `OvdOutput` never allocates; it adopts a block whose size is its
+  capacity. A failed append writes nothing; failing the frame is the
+  terminal's decision (R30).
+- `OvdOutput` is declared in the private header so the terminal embeds it
+  without another allocation; only `src/output.c` touches its fields
+  (Art. IV tension, resolved in the doc comment).
+
 ### Protocol and backends
 
 **R33 — Never rely on autowrap.** After a glyph lands in the last column
