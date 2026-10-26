@@ -47,7 +47,7 @@ try_compile(overdrive_has_c23
             return available() && pointer == nullptr
                 && kind == KIND_ZERO ? 0 : 1;
         }
-    ]=]
+]=]
     C_STANDARD 23 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF
     COMPILE_DEFINITIONS -Wall -Wextra -Wpedantic -Werror
     OUTPUT_VARIABLE overdrive_c23_log)

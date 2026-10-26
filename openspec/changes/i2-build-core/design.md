@@ -38,6 +38,9 @@ changing the public contract.
   tests can resolve a shared Overdrive without machine PATH changes.
 - Generate per-header translation units and tiny export-fixture libraries
   in the build tree. Never commit generated C or build output.
+- End generated C with a newline, including the C23 probe's bracket
+  literal. Clang 18 CI caught trailing indentation after its last newline;
+  the generator is corrected rather than suppressing `-Wnewline-eof`.
 - Check defined external symbols for archives, dynamic exports for ELF,
   external defined symbols for Mach-O, and the PE export-name table.
   Remove Mach-O's ABI underscore only on Mach-O.
