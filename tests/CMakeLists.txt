@@ -93,3 +93,11 @@ add_test(NAME check_exports_rejects_generic COMMAND "${CMAKE_COMMAND}"
 
 ovd_add_test(test_core)
 ovd_add_test(test_headers)
+
+# Replay interpreter and screen model: the oracle for rendering tests (SC-001).
+add_library(overdrive_vt_replay STATIC support/screen.c support/vt_replay.c)
+target_link_libraries(overdrive_vt_replay PUBLIC $<COMPILE_ONLY:overdrive::overdrive>)
+target_include_directories(overdrive_vt_replay PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/support")
+ovd_target_warnings(overdrive_vt_replay)
+ovd_add_test(test_vt_replay)
+target_link_libraries(test_vt_replay PRIVATE overdrive_vt_replay)

@@ -37,8 +37,8 @@ Every behavior task is preceded by its test task, which must be seen failing.
 - [ ] T017 [P] Implement `src/alloc.h`/`src/alloc.c` (default and user allocator dispatch with overflow-checked sizes) and `src/output.h`/`src/output.c` (`OvdOutput` with fixed capacity per size, bounded append, reset; R30)
 
 ### OVD-05 Replay interpreter (test support) [P]
-- [ ] T018 [P] Write `tests/support/vt_replay.{c,h}`: applies the R7 subset to a text screen model with styles; rejects any sequence outside the subset (so unexpected output fails tests); models autowrap on with deferred wrap and fails on printing in pending-wrap state or on any scroll (R33); `tests/support/screen.{c,h}` renders expected screens from text rows (Art. VI)
-- [ ] T019 [P] Write `tests/test_vt_replay.c`: the interpreter's own tests (CUP, SGR deltas, wide glyphs, ED 2, unknown sequence → error)
+- [x] T018 [P] Write `tests/support/vt_replay.{c,h}`: applies the R7 subset to a text screen model with styles; rejects any sequence outside the subset (so unexpected output fails tests); models autowrap on with deferred wrap and fails on printing in pending-wrap state or on any scroll (R33); `tests/support/screen.{c,h}` renders expected screens from text rows (Art. VI)
+- [x] T019 [P] Write `tests/test_vt_replay.c`: the interpreter's own tests (CUP, SGR deltas, wide glyphs, ED 2, unknown sequence → error)
 
 ### OVD-06 Platform layer [P]
 - [ ] T020 [P] [US2] Write `src/platform/platform.h`: is-terminal, size, enter/leave (records prior modes in a struct), write-all, environment lookup — no OS types in the header

@@ -407,3 +407,35 @@ saving and restoring the screen (R26), terminals ignoring mode 2026 when
 unsupported (R34), and the Windows console modes (R28). They are checked
 by hand in real terminals through the manual checklist (OVD-12), and any
 difference found becomes a spec change.
+
+### Replay oracle (OVD-05)
+
+**R37 — The replay interpreter is stricter than any terminal.** R7, R33,
+and R34 leave the oracle's edges open; it takes the strict side of each,
+so output that depends on terminal-specific behavior fails a test
+instead of passing by luck. Every rendering test inherits these rules:
+- Widths come from a classifier the caller passes (code point →
+  extender, narrow, wide); the oracle never links `src/unicode`, and
+  hard-codes only R15's ZWJ rule. Rendering tests pass one built on the
+  R16 policy.
+- R33: a glyph printed in the pending-wrap state fails whatever DECAWM
+  says, and so does a wide glyph starting in the last column. No C0
+  control is accepted, so nothing can scroll.
+- The cursor is unknown until the first CUP; printing before it fails.
+- Encodings are exact: CUP has two explicit 1-based in-range
+  parameters without leading zeros; reset is `CSI 0 m` (`CSI m` is
+  rejected); ED is only `CSI 2 J` and only in the default SGR state,
+  because the erase color is terminal-dependent; a DEC private mode
+  carries one parameter; colon sub-parameters, attribute-off codes, and
+  color values above 255 are rejected.
+- Overwriting one half of a wide glyph makes the other half
+  indeterminate, never equal to anything, until it is overwritten:
+  terminals disagree on what a split glyph shows.
+- Mode 2026 must alternate `h`, `l`; its place in a frame (R34) is
+  checked by the diff tests, not by the oracle. `?1049h` clears the
+  model; `?1049l` makes every cell indeterminate and the cursor unknown
+  (the primary screen is not modeled).
+- Each feed is one write (FR-022): an escape sequence, code point, or
+  grapheme may not span two feeds. Code points the canvas never holds
+  (R17) are rejected. The first error is sticky and names its byte
+  offset and the offending bytes.
