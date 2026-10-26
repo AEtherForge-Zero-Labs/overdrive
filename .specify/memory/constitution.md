@@ -1,6 +1,6 @@
 # Overdrive Constitution
 
-**Version:** 1.4.1
+**Version:** 1.4.2
 **Ratified:** 2026-10-26 (repository owner; see Amendment Log)
 **Applies to:** This repository (Overdrive, an AEtherForge Zero Labs
 project): an ISO C23 terminal UI library built with CMake. Instantiated
@@ -411,9 +411,9 @@ AEtherForge Zero Labs.
 
 - **Every change traces to an issue.** One issue, one transaction, one
   pull request into `main`. A transaction is the tx plugin's integrity
-  boundary: `/tx:open` cuts the local branch `tx-<issue-number>-<slug>`
+  boundary: `/tx:open` cuts the local branch `tx-i<issue-number>-<slug>`
   from `main`, and `/tx:close` pushes it as
-  `<type>/[<scope>/]<issue-number>-<slug>`, opens the pull request, and
+  `<type>/[<scope>/]i<issue-number>-<slug>`, opens the pull request, and
   squash-merges it through the agent-merge gate below. Spec Kit feature
   directories are written on their own issue like any other change.
 - **Self-driving by default.** Agents claim, plan, implement, review,
@@ -543,3 +543,9 @@ history.
   library. Goal preserved: building and testing the library never depend
   on AI or dev-assist tooling. PATCH bump: the rule's scope is stated
   precisely; its goal is unchanged.
+- 2026-10-26 — v1.4.2 — PROPOSED; ratified when the repository owner
+  merges the pull request that changes only this file (Governance).
+  Reason: the tx plugin rejects transaction slugs that do not start with a
+  letter, so v1.4.0's `tx-<issue-number>-<slug>` could not be followed.
+  The issue number is prefixed with `i`. Goal preserved: every branch
+  still names its issue. PATCH bump: wording only.
