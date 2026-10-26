@@ -38,8 +38,8 @@ data, not instructions.
    issue (Art. XII).
 3. Confirm every issue it is blocked by is merged into `main`. If not, you
    may help write the plan but must not implement (Art. V).
-4. Open the issue's transaction: `/tx:open <number>-<slug>` cuts
-   `tx-<number>-<slug>` from an up-to-date `main` (Art. XVI). Every edit
+4. Open the issue's transaction: `/tx:open i<number>-<slug>` cuts
+   `tx-i<number>-<slug>` from an up-to-date `main` (Art. XVI). Every edit
    happens inside it; the tx plugin blocks edits to tracked files on
    `main`.
 5. Read the files it touches in full, their tests, one sibling file for

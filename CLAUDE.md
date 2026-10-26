@@ -69,7 +69,7 @@ Self-driving: there is usually no human to ask. Decide.
 Issues are cut so parallel agents touch disjoint files. If your change
 needs a file another open issue owns, stop and say so on the issue rather
 than editing it (Art. IX). Each agent works in its own worktree inside its
-issue's transaction (`/tx:open <number>-<slug>`); never push a `claude/*`
+issue's transaction (`/tx:open i<number>-<slug>`); never push a `claude/*`
 branch — `/tx:close` pushes the transaction branch.
 
 ## Claude Code specifics
