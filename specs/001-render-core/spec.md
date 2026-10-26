@@ -4,7 +4,8 @@
 
 **Created**: 2026-10-26
 
-**Status**: Approved for implementation (constitution v1.3.0)
+**Status**: Approved for implementation (constitution v1.4.1; contracts
+revised by #20, decisions R15–R36 in research.md)
 
 **Input**: "Prepare a specification for the rendering engine and its minimum
 viable architecture. Define the public contracts for terminal lifecycle,
@@ -66,8 +67,9 @@ compares the decoded screen with the canvas contents.
 
 A developer runs a program that creates a system terminal, renders a few
 frames, and destroys it. During the run the program owns the screen; after
-it, the user's terminal is exactly as before: same screen contents and
-scrollback, cursor visible, echo and wrapping restored.
+it, the user's terminal is as before: with the default alternate
+screen, the same screen contents and scrollback; echo and console modes
+restored to what they were; cursor visible and autowrap on (R26).
 
 **Why this priority**: A renderer that leaves the terminal broken is not
 usable. Windows Terminal is the primary validation target
@@ -139,28 +141,42 @@ required for correctness.
 
 ### Edge Cases
 
-- Text containing ESC, other C0/C1 controls, DEL, newline, or tab: each
-  is drawn as U+FFFD; no control sequence reaches the output.
+- Text containing ESC, other C0/C1 controls, DEL, newline, tab, NUL,
+  U+2028/U+2029, or a bidi control: each is drawn as U+FFFD; no control
+  sequence reaches the output (R17).
 - Invalid or truncated UTF-8: each maximal invalid subsequence is one
   U+FFFD.
-- A wide glyph whose second half falls outside the clip or the right
-  edge: drawn as a space.
-- Overwriting either half of a wide glyph: its other half becomes a space.
-- A combining mark with no base character (at the start of text): drawn
-  as U+FFFD (research R5).
-- A grapheme longer than the cell's storage: drawn as U+FFFD.
+- A wide glyph with either half outside the clip or the canvas (left or
+  right): the half inside is drawn as a space; the text still advances
+  two columns (R19).
+- Overwriting either half of a wide glyph: its other half becomes a space
+  in its own style, even when that half is outside the clip (R20).
+- An extender (combining mark, ZWJ, variation selector, format
+  character) at the start of text: drawn as U+FFFD (R15).
+- A grapheme longer than the cell's storage: drawn as U+FFFD, width 1.
 - Rectangles with zero or negative size, or entirely off-canvas: no-op.
-- A 1×1 terminal; a terminal whose size reads as 0×0: begin fails with
-  `OVD_ERROR_PLATFORM`, nothing is drawn.
+- Any `int32_t` coordinates or sizes, including extremes: no overflow;
+  the text call's return value saturates at `INT32_MAX` (R18).
+- A 1×1 terminal works. A system terminal whose size reads as 0 in either
+  dimension: begin fails with `OVD_ERROR_PLATFORM` and opens no frame
+  (R25).
 - The bottom-right cell: drawing it must not scroll the screen.
 - The sink returns false: `ovd_frame_end` returns `OVD_ERROR_IO` and the
   next frame is a full redraw.
-- Allocation failure at create or resize: the call fails cleanly, nothing
-  leaks, and the terminal keeps working at its old size (resize).
+- Allocation failure at create: create fails, nothing leaks, nothing
+  stays changed. At resize: `ovd_frame_begin` fails with
+  `OVD_ERROR_ALLOCATION`, opens no frame, and keeps the old buffers and
+  size; the next begin retries (R21).
+- nullptr arguments: fallible calls return `OVD_ERROR_INVALID_ARGUMENT`;
+  infallible ones do nothing and return zero values (R22).
+- Drawing on the canvas after its frame ended: no effect (R23).
+- The sink calling back into its own terminal: `OVD_ERROR_STATE` (R24).
+- stdin not a terminal (system backend): the echo step is skipped (R27).
+- A restore step failing at destroy: the remaining steps still run (R28).
 - `ovd_frame_begin` twice, `ovd_frame_end` without begin: `OVD_ERROR_STATE`.
 - `ovd_terminal_destroy` with a frame open: abandons it, restores.
-- `NO_COLOR` set: detection selects `OVD_COLOR_DEPTH_NONE`; an explicit
-  depth in the config still wins.
+- `NO_COLOR` present and non-empty: detection selects
+  `OVD_COLOR_DEPTH_NONE`; an explicit depth in the config still wins.
 
 ## Requirements *(mandatory)*
 
@@ -169,7 +185,9 @@ required for correctness.
 **Core**
 - **FR-001**: Every fallible public function MUST report failure through
   an `OvdResult` and MUST leave its out parameters and observable state
-  unchanged on failure.
+  unchanged on failure. The one exception is `ovd_frame_end`, which closes
+  the frame on every outcome and marks the screen unknown on
+  `OVD_ERROR_IO` (R21).
 - **FR-002**: The library MUST keep no process-wide mutable state; two
   terminals MUST be usable in one process.
 - **FR-003**: The library MUST report its own version at run time.
@@ -177,13 +195,17 @@ required for correctness.
 **Terminal lifecycle (Platform)**
 - **FR-010**: The system backend MUST work on Windows (Windows Terminal,
   Windows 10 1809+ console host) and on POSIX terminals (Linux, macOS).
-- **FR-011**: Creating a system terminal MUST record every terminal mode
-  it changes, and destroying it MUST restore each, in reverse order.
+- **FR-011**: Creating a system terminal MUST record every
+  operating-system mode it changes, and destroying it MUST restore each to
+  its recorded value, in reverse order. Terminal state that cannot be read
+  back MUST be reset to its default. A failed create MUST undo its
+  completed steps (R26, R28).
 - **FR-012**: The headless backend MUST behave identically to the system
-  backend in every respect except where its output goes and where its size
-  comes from.
-- **FR-013**: Color depth MUST be detected from the environment by
-  default and MUST be overridable by the caller.
+  backend except in where its output goes, where its size and color depth
+  come from, and in changing no modes and emitting no lifecycle sequences
+  (R35).
+- **FR-013**: For the system backend, color depth MUST be detected from
+  the environment by default and MUST be overridable by the caller.
 - **FR-014**: Terminal size MUST be re-read at the start of every frame.
 
 **Render**
@@ -191,11 +213,13 @@ required for correctness.
   output for a frame MUST transform the previous screen into exactly the
   frame's contents.
 - **FR-021**: A frame identical to the screen MUST produce no output.
-- **FR-022**: A frame's output MUST be delivered in a single write.
+- **FR-022**: A frame's output MUST be delivered in a single write: one
+  contiguous buffer, with nothing interleaved (R34).
 - **FR-023**: Colors MUST be emitted at the terminal's color depth,
   mapping richer colors to the nearest available color.
-- **FR-024**: Output MUST NOT depend on terminal autowrap or cause
-  scrolling.
+- **FR-024**: Output MUST NOT print a glyph while the cursor is in the
+  pending-wrap state, and MUST NOT cause scrolling, so it renders the same
+  with autowrap on or off (R33).
 - **FR-025**: When the screen state is unknown (first frame, resize,
   failed write, `ovd_terminal_invalidate`), the next frame MUST be a full
   redraw.
@@ -204,9 +228,11 @@ required for correctness.
 
 **Canvas**
 - **FR-030**: Every drawing operation MUST respect the clip rectangle and
-  the canvas bounds and MUST NOT fail or allocate.
-- **FR-031**: Text MUST be measured in terminal columns per grapheme using
-  a pinned Unicode version's East Asian Width data.
+  the canvas bounds for any `int32_t` arguments, and MUST NOT fail or
+  allocate. The sole write outside the clip is repairing a split wide
+  glyph (R20).
+- **FR-031**: Text MUST be segmented and measured per R15–R16, using a
+  pinned Unicode version's East Asian Width and General Category data.
 - **FR-032**: No byte of caller text MUST reach the output as a control
   sequence.
 - **FR-033**: The current frame's cells MUST be readable back.
@@ -241,11 +267,12 @@ required for correctness.
   (100% of test frames).
 - **SC-002**: An unchanged frame writes 0 bytes.
 - **SC-003**: Changing one narrow cell writes at most 64 bytes at
-  truecolor depth with both colors RGB (budget: cursor move ≤ 10, SGR
-  with two RGB colors ≤ 40, glyph ≤ 4, reset 4, plus margin; measured by
-  the benchmark).
-- **SC-004**: After the first frame at a given size, frames make 0
-  allocator calls (measured by the allocation test).
+  truecolor depth with both colors RGB and no attributes, at sizes up to
+  999×999 (budget: cursor move ≤ 10, SGR with two RGB colors ≤ 40, glyph ≤
+  4, reset 4, plus margin; measured by the benchmark).
+- **SC-004**: Frames whose size equals the terminal's current buffers make
+  0 allocator calls, whatever they draw (R30–R32; measured by the
+  allocation test).
 - **SC-005**: The library builds with 0 warnings under GCC 14 and Clang
   with `-std=c23 -Wall -Wextra -Wpedantic -Werror`, on Linux, macOS, and
   Windows (MinGW-w64), and the headless suite passes on each.
@@ -266,9 +293,11 @@ required for correctness.
   UTF-8 console code page).
 - A cell stores a grapheme of at most 15 UTF-8 bytes; longer clusters are
   rare and drawn as U+FFFD.
-- Grapheme segmentation in this feature is base character plus following
-  combining marks, ZWJ sequences, and variation selectors; full UAX #29
-  segmentation is out of scope.
+- Grapheme segmentation in this feature is R15: a base character plus
+  following combining marks, ZWJ sequences, variation selectors, and
+  format characters; full UAX #29 segmentation is out of scope.
+- Before create, the cursor is visible and autowrap is on (the normal
+  shell state), since neither can be read back without input (R26).
 
 ## Out of scope
 

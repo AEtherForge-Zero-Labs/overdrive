@@ -44,8 +44,13 @@ typedef struct OvdVersion {
 OVD_API OvdVersion ovd_version(void);
 
 /* Every fallible public function returns an OvdResult. On anything but
- * OVD_OK, out parameters are left unchanged and no state was modified,
- * unless the function's own comment says otherwise. */
+ * OVD_OK, out parameters are left unchanged and no state was modified.
+ * The one exception is ovd_frame_end, whose comment says what it changes.
+ *
+ * nullptr: a fallible function given a nullptr object or out pointer
+ * returns OVD_ERROR_INVALID_ARGUMENT. A function that cannot fail does
+ * nothing when given a nullptr object and returns a zero value (a zero
+ * size, OVD_COLOR_DEPTH_NONE, false, 0). */
 typedef enum OvdResult : int32_t {
     OVD_OK = 0,
     /* nullptr where an object is required, or a value outside its
@@ -77,7 +82,9 @@ typedef struct OvdSize {
 
 /* A rectangle in terminal cells. (x, y) is the top-left cell; column 0,
  * row 0 is the top-left of the screen. Coordinates may be negative or
- * extend past the screen: drawing clips to the canvas, never fails. */
+ * extend past the screen: drawing clips to the canvas, never fails. Any
+ * int32_t values are valid: Overdrive's rectangle arithmetic does not
+ * overflow. */
 typedef struct OvdRect {
     int32_t x;
     int32_t y;

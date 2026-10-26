@@ -34,7 +34,7 @@ one write per frame; no process-wide state
 
 ## Constitution Check
 
-*Gate against constitution v1.3.0. Re-checked after design.*
+*Gate against constitution v1.4.1. Re-checked after design and after the #20 contract resolutions (research R15–R36).*
 
 | Article | Gate | Status |
 |---|---|---|
@@ -77,7 +77,7 @@ must be stack values; `OvdSize`, `OvdRect`, `OvdVersion` — plain values;
 | `cmake/gen_unicode_tables.cmake` | generator | FR-031 without committing generated code (Art. II) |
 | `src/buffer.c` + `src/buffer.h` | owning module (`OvdBuffer`: cell grid) | FR-020, FR-030 invariants (wide-glyph pairing) |
 | `src/canvas.c` | owning module (`OvdCanvas`: buffer view + clip) | FR-030–FR-034 |
-| `src/output.c` + `src/output.h` | owning module (`OvdOutput`: growable byte buffer) | FR-022 |
+| `src/output.c` + `src/output.h` | owning module (`OvdOutput`: byte buffer sized per terminal size to a proven bound, bounded appends; R30) | FR-022, SC-004 |
 | `src/diff.c` + `src/diff.h` | transformational (screen, frame → output) | FR-020, FR-021, FR-024, FR-025 |
 | `src/terminal.c` + `src/internal.h` | owning module (`OvdTerminal`) | FR-002, FR-012, FR-014, frame state machine |
 | `src/terminal_system.c` | part of the terminal module: system backend | FR-010, FR-011 |
