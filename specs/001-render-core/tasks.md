@@ -29,34 +29,34 @@ Every behavior task is preceded by its test task, which must be seen failing.
 ### OVD-03 Unicode [P]
 - [ ] T012 [P] Vendor UCD `EastAsianWidth.txt` and `DerivedGeneralCategory.txt` for the pinned version into `third_party/ucd/` with the Unicode license
 - [ ] T013 [P] Write `cmake/gen_unicode_tables.cmake` generating range tables into the build tree (Art. II); wire it from `CMakeLists.txt` (append-only block)
-- [ ] T014 [P] [US1] Write `tests/test_unicode.c`: ASCII, CJK (width 2), combining marks, ZWJ emoji sequence, VS16, invalid/truncated UTF-8 → one U+FFFD per maximal subsequence, every C0/C1/DEL → U+FFFD, lone combining mark → U+FFFD, >15-byte grapheme → U+FFFD
-- [ ] T015 [P] [US1] Implement `src/unicode.h`/`src/unicode.c`: next-grapheme iterator returning bytes, width, and replacement flag (R5, R6)
+- [ ] T014 [P] [US1] Write `tests/test_unicode.c`: ASCII, CJK (width 2), combining marks, ZWJ emoji sequence, VS16, invalid/truncated UTF-8 → one U+FFFD per maximal subpart (`F0 80 80` → 3 × U+FFFD, `ED A0 80` → 3 × U+FFFD, `F0 9F 98` → 1 × U+FFFD, each also checked through the return value), every C0/C1/DEL → U+FFFD, lone combining mark → U+FFFD, >15-byte grapheme → U+FFFD (whole grapheme, width 1), NUL, U+2028/9, bidi controls → U+FFFD, ZWJ sequence = one grapheme of its base's width, extenders after a U+FFFD attach to it, two leading marks → one U+FFFD carrying the second, leading ZWJ → U+FFFD joining nothing, four-person family emoji (25 bytes) → one U+FFFD (R15–R17)
+- [ ] T015 [P] [US1] Implement `src/unicode.h`/`src/unicode.c`: next-grapheme iterator returning bytes, width, and replacement flag (R15–R17)
 
 ### OVD-04 Allocation and output buffer [P]
-- [ ] T016 [P] Write `tests/test_alloc.c` (part 1): counting/failing test allocator in `tests/support/test_alloc.{c,h}`; output buffer grows geometrically, fails cleanly on refusal, reuses capacity
-- [ ] T017 [P] Implement `src/alloc.h`/`src/alloc.c` (default and user allocator dispatch with overflow-checked sizes) and `src/output.h`/`src/output.c` (`OvdOutput` append, reset, capacity)
+- [ ] T016 [P] Write `tests/test_alloc.c` (part 1): counting/failing test allocator in `tests/support/test_alloc.{c,h}`; output buffer is allocated once to a requested capacity, refuses appends past it without writing, resets for reuse; allocator dispatch rejects size 0 and overflow; resize helper allocates all new blocks before releasing old ones (R30–R32)
+- [ ] T017 [P] Implement `src/alloc.h`/`src/alloc.c` (default and user allocator dispatch with overflow-checked sizes) and `src/output.h`/`src/output.c` (`OvdOutput` with fixed capacity per size, bounded append, reset; R30)
 
 ### OVD-05 Replay interpreter (test support) [P]
-- [ ] T018 [P] Write `tests/support/vt_replay.{c,h}`: applies the R7 subset to a text screen model with styles; rejects any sequence outside the subset (so unexpected output fails tests); `tests/support/screen.{c,h}` renders expected screens from text rows (Art. VI)
+- [ ] T018 [P] Write `tests/support/vt_replay.{c,h}`: applies the R7 subset to a text screen model with styles; rejects any sequence outside the subset (so unexpected output fails tests); models autowrap on with deferred wrap and fails on printing in pending-wrap state or on any scroll (R33); `tests/support/screen.{c,h}` renders expected screens from text rows (Art. VI)
 - [ ] T019 [P] Write `tests/test_vt_replay.c`: the interpreter's own tests (CUP, SGR deltas, wide glyphs, ED 2, unknown sequence → error)
 
 ### OVD-06 Platform layer [P]
 - [ ] T020 [P] [US2] Write `src/platform/platform.h`: is-terminal, size, enter/leave (records prior modes in a struct), write-all, environment lookup — no OS types in the header
-- [ ] T021 [P] [US2] Implement `src/platform/platform_posix.c` (termios ECHO/ICANON, TIOCGWINSZ, write loop with EINTR) — verify each call against POSIX docs and cite them in the PR
-- [ ] T022 [P] [US2] Implement `src/platform/platform_windows.c` (console modes, code page 65001, `GetConsoleScreenBufferInfo`, `WriteFile` loop) — verify against Microsoft docs and cite them
-- [ ] T023 [P] [US2] Implement color detection from the environment (R10) in platform-independent `src/detect.c` with `tests/test_detect.c` using an injected environment lookup
+- [ ] T021 [P] [US2] Implement `src/platform/platform_posix.c` (termios ECHO only, on stdin only if it is a terminal (R27); TIOCGWINSZ; write loop with EINTR; enter/leave order and best-effort restore per R26, R28) — verify each call against POSIX docs and cite them in the PR
+- [ ] T022 [P] [US2] Implement `src/platform/platform_windows.c` (console modes incl. `DISABLE_NEWLINE_AUTO_RETURN`, code page 65001, `GetConsoleScreenBufferInfo`, `WriteFile` loop; order, rollback, and restore per R26–R28) — verify against Microsoft docs and cite them
+- [ ] T023 [P] [US2] Implement color detection from the environment (R10) in platform-independent `src/detect.c` with `tests/test_detect.c` using an injected environment lookup; first match wins, NO_COLOR only when non-empty (R36)
 
 ## Phase 2 — Canvas (depends on OVD-03, OVD-04)
 
 ### OVD-07 Cell buffer and canvas
-- [ ] T024 [US1] Write `tests/test_canvas.c`: fill, clip set/restore, text advance, clipping, wide glyph at right edge/clip, overwriting halves of a wide glyph, cell read-back, negative and zero rects
+- [ ] T024 [US1] Write `tests/test_canvas.c`: fill, clip set/restore, text advance, clipping, wide glyph at right edge/clip, overwriting halves of a wide glyph incl. the other half outside the clip (R20), first half outside clip or left edge (R19), cell read-back, negative and zero rects, INT32_MIN/MAX coordinates (R18), closed canvas and nullptr: drawing no-op, `ovd_canvas_text` → 0, `ovd_canvas_set_clip` stores nothing and → {0,0,0,0}, `ovd_canvas_cell` → false (R22, R23), color normalization
 - [ ] T025 [US1] Implement `src/buffer.h`/`src/buffer.c` (`OvdBuffer` grid, resize via allocator, wide-glyph pairing invariant)
 - [ ] T026 [US1] Implement `src/canvas.c` (`ovd_canvas_size`, `_clip`, `_set_clip`, `_fill`, `_text`, `_cell`)
 
 ## Phase 3 — Rendering (parallel pair)
 
 ### OVD-08 Differential renderer (depends on OVD-02, OVD-04, OVD-05, OVD-07)
-- [ ] T027 [US1] Write `tests/test_diff.c`: replay equivalence (SC-001) over a corpus of frames incl. random frames from a fixed seed; unchanged frame → 0 bytes (SC-002); one-cell change ≤ 64 bytes (SC-003); full redraw after unknown screen; bottom-right cell; depth 16/256/NONE output
+- [ ] T027 [US1] Write `tests/test_diff.c`: replay equivalence (SC-001) over a corpus of frames incl. random frames from a fixed seed; unchanged frame → 0 bytes (SC-002); one-cell change ≤ 64 bytes (SC-003); full redraw after unknown screen; bottom-right cell; depth 16/256/NONE output; adversarial frames (alternating styles, all-RGB, max-length graphemes) never exceed the output bound (R30); output framing (R34)
 - [ ] T028 [US1] Implement `src/diff.h`/`src/diff.c` (R8)
 
 ### OVD-09 Boxes [P] (depends on OVD-07)
@@ -66,11 +66,11 @@ Every behavior task is preceded by its test task, which must be seen failing.
 ## Phase 4 — Terminal and frames
 
 ### OVD-10 Headless terminal and frame API (depends on OVD-04, OVD-07, OVD-08)
-- [ ] T031 [US1] Write `tests/test_terminal.c`: config defaults; create/destroy headless; frame state machine errors; set_size + resize full redraw; invalidate; sink failure → `OVD_ERROR_IO` then full redraw; destroy with open frame; two terminals at once (FR-002); allocation failure at create and at resize leaves state intact
+- [ ] T031 [US1] Write `tests/test_terminal.c`: config defaults; create/destroy headless; frame state machine errors; set_size + resize full redraw; invalidate; sink failure → `OVD_ERROR_IO` then full redraw; destroy with open frame; two terminals at once (FR-002); allocation failure at create and at resize leaves state intact (R21, R31); sink re-entrancy: begin/end/set_size → OVD_ERROR_STATE, abandon/invalidate no-op, canvas calls act as closed, size and color depth normal (R24); failed begin keeps `ovd_terminal_size` and a pending set_size, applied by the next successful begin (R21); headless ignores the environment (R35); set_size and create argument validation (R22)
 - [ ] T032 [US1] Implement `src/terminal.c` and `src/internal.h` (headless backend, frame begin/end/abandon, one write per frame, optional sync markers)
 
 ### OVD-11 System backend (depends on OVD-06, OVD-10)
-- [ ] T033 [US2] Implement the system backend in `src/terminal_system.c` via `platform.h` (called from `src/terminal.c` through `src/internal.h`): enter/leave order (FR-011), size re-read per frame (FR-014), `OVD_ERROR_NOT_A_TERMINAL` with nothing written
+- [ ] T033 [US2] Implement the system backend in `src/terminal_system.c` via `platform.h` (called from `src/terminal.c` through `src/internal.h`): enter/leave order (FR-011), size re-read per frame (FR-014), `OVD_ERROR_NOT_A_TERMINAL` with nothing written, rollback on failure, best-effort restore, exit sequence per R26
 - [ ] T034 [US2] Add a non-interactive test: stdout redirected → `OVD_ERROR_NOT_A_TERMINAL`, output file empty (`tests/test_system_notty.c`)
 
 ### OVD-13 Benchmark and steady-state allocations [P] (depends on OVD-10)

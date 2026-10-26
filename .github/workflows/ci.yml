@@ -1,0 +1,88 @@
+name: library-ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: ${{ matrix.os }} / ${{ matrix.compiler }} / ${{ matrix.preset }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, compiler: gcc-14, preset: debug }
+          - { os: ubuntu-24.04, compiler: gcc-14, preset: release }
+          - { os: ubuntu-24.04, compiler: gcc-14, preset: shared }
+          - { os: ubuntu-24.04, compiler: clang-18, preset: debug-clang }
+          - { os: macos-latest, compiler: cc, preset: debug }
+          - { os: macos-latest, compiler: cc, preset: shared }
+    env:
+      CC: ${{ matrix.compiler }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Linux compiler and build tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-14 clang-18 cmake ninja-build
+          if [ "$CC" = clang-18 ]; then
+            echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"
+          fi
+      - name: Show toolchain
+        run: |
+          "$CC" --version
+          cmake --version
+          ninja --version
+      - name: Configure
+        run: cmake --preset "${{ matrix.preset }}"
+      - name: Build
+        run: cmake --build --preset "${{ matrix.preset }}"
+      - name: Test
+        run: ctest --preset "${{ matrix.preset }}"
+
+  windows-cross:
+    name: MinGW-w64 / Wine / static and shared
+    runs-on: ubuntu-24.04
+    container: debian:trixie
+    env:
+      WINEPREFIX: ${{ github.workspace }}/build/wine-prefix
+    steps:
+      - name: Install declared cross toolchain
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates git cmake ninja-build gcc-mingw-w64-x86-64 wine wine64
+      - uses: actions/checkout@v7
+      - name: Show toolchain
+        run: |
+          x86_64-w64-mingw32-gcc --version
+          wine --version
+          cmake --version
+          ninja --version
+      - name: Configure, build, and test Windows binaries
+        run: |
+          for preset in windows-cross-debug windows-cross-shared; do
+            cmake --preset "$preset"
+            cmake --build --preset "$preset"
+            ctest --preset "$preset"
+          done
+
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [native, windows-cross]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every compiler/platform job
+        env:
+          NATIVE_RESULT: ${{ needs.native.result }}
+          WINDOWS_RESULT: ${{ needs.windows-cross.result }}
+        run: |
+          test "$NATIVE_RESULT" = success
+          test "$WINDOWS_RESULT" = success
