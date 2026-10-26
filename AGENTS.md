@@ -201,6 +201,18 @@ Co-Authored-By: <the tool's own co-author line, if it adds one>
   head commit, an independent review with no unresolved defect, no
   `needs-human` label, no owner-reserved path. `.claude/hooks/guard.sh`
   checks the mechanical parts.
+- The only accepted merge is the canonical form, run alone:
+  `gh pr merge <N> [--squash|--merge|--rebase] [--delete-branch|-d]`.
+  The guard blocks every other spelling.
+- The reviewer posts a PR comment with the findings and, each on its own
+  line, `Review-Verdict: PASS` (or `FAIL`) and `Reviewed-Head: <sha>`,
+  the full head commit reviewed. The guard accepts a merge only when a
+  PASS names the current head and no FAIL does; a new push needs a new
+  review.
+- Text that mentions a guarded command (merge, push, `gh api`, a token
+  variable) goes in a file written with the Write tool and passed with
+  `--body-file` or `-F`. The guard reads the whole command line, quoted
+  text included.
 - Never tag, release, change visibility, settings, or secrets, force-push,
   or delete; label the issue `needs-human` instead (Art. XVI).
 

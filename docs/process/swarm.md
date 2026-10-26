@@ -54,14 +54,21 @@ gh pr list --state merged --json number,title,closingIssuesReferences
 
 - One PR per issue, PR template filled in completely, `Closes #<number>`.
 - Required checks: `ci-ok` (all platforms), the exported-symbol check,
-  and the tx plugin's `openspec-validate` and `docs-form-check`.
-- The reviewer agent leaves a review comment with a verdict and the
-  identity checklist results.
+  `guard-tests`, and the tx plugin's `openspec-validate` and
+  `docs-form-check`.
+- The reviewer agent leaves a review comment with the identity checklist
+  results and, each on its own line, `Review-Verdict: PASS` (or `FAIL`)
+  and `Reviewed-Head: <sha>`, the full 40-character head commit it
+  reviewed. A new push needs a new review.
+- Text that mentions a guarded command (a merge, a push, `gh api`, a
+  token variable) goes in a file written with the Write tool and passed
+  with `--body-file` or `-F`. The guard reads the whole command line,
+  quoted text included.
 - After a merge, every open PR rebases on `main` before its next review.
 
 ## Merge authority
 
-Constitution v1.4.1, Art. XVI: **agents merge** when all of these hold —
+Constitution v1.4.2, Art. XVI: **agents merge** when all of these hold —
 
 1. every required check is green on the PR's head commit;
 2. an agent session other than the author reviewed the PR and found no
@@ -71,9 +78,25 @@ Constitution v1.4.1, Art. XVI: **agents merge** when all of these hold —
 4. the PR changes no owner-reserved path: the constitution, `LICENSE`,
    `.github/CODEOWNERS`, `.claude/hooks/guard.sh`, `.claude/settings.json`.
 
-`.claude/hooks/guard.sh` checks 1, 3, and 4 mechanically on every
-`gh pr merge`, and refuses `--admin`. `/tx:close` performs the squash
-merge, so the review comes before it.
+The only merge command is the canonical form, run alone:
+
+```bash
+gh pr merge <N> [--squash|--merge|--rebase] [--delete-branch|-d]
+```
+
+`.claude/hooks/guard.sh` blocks every other spelling of a merge (flags
+before the number, `-R`, an env prefix, `bash -c`, `--auto`, `--admin`,
+the merge API, a GraphQL mutation). For the canonical form, it checks PR
+`<N>`: it is open against `main` from this repository, its checks are
+all green, it changes no reserved path (renames included), neither it
+nor its closing issues carry `needs-human`, and a member's comment says
+`Review-Verdict: PASS` with `Reviewed-Head:` equal to the PR's current
+head, with no `FAIL` for that head. `/tx:close` performs the squash merge
+in this form, so the review comes before it. The squash title is the PR
+title.
+
+Pushes are allowed only as `git [-C <dir>] push [-u] origin <src>[:<dst>]`
+or a bare `git push`. Only the owner removes `needs-human`.
 
 A human is needed only for the Art. XVI list: constitution changes,
 license/visibility/ownership, publishing, destructive operations,
@@ -81,12 +104,29 @@ secrets and org settings, weakening protection, and real-terminal
 observations. Agents label those `needs-human` and keep working on other
 ready issues.
 
-**Server-side protection.** On a private repository under the free plan,
-GitHub does not enforce rulesets, so the gate above is enforced only by
-the guard hook and agent discipline; the tx seed reports its ruleset as
-`unsupported` there. Making it server-enforced needs the repository public
-or a paid plan, which is an owner decision; the next `/tx:open` after that
-lands the ruleset.
+**What the server enforces, and what only the guard enforces.** The
+repository is public, so GitHub enforces its rulesets on `main`: changes
+arrive only through pull requests, with no force-push or deletion, and
+the required checks must be green on an up-to-date head. A ruleset that
+pins the required checks to the GitHub Actions app makes a status posted
+through the API unable to satisfy them; rulesets are the owner's to
+create and change. Everything else
+in the gate holds only because the guard hook runs: the review verdict,
+`needs-human`, reserved paths, commit trailers, and the human-needed
+commands. The guard reads command text. A command built at run time can
+evade it, so it is a tripwire, not a sandbox.
+
+The remaining gap is identity. The owner and every agent use one GitHub
+account, so the server cannot tell an agent's merge from the owner's, and
+code-owner review cannot be required (nobody can approve their own pull
+request). Closing it needs the owner: agents on a bot account or a
+GitHub App without admin rights, and CODEOWNERS review required on the
+reserved paths.
+
+**Who changes the guard.** `.claude/hooks/` and the Claude settings files
+are protected twice. Edit and Write deny rules cover them, and the guard
+blocks any Bash command that mentions them unless it is read-only. Only
+the owner changes the guard.
 
 ## What agents cannot verify
 
