@@ -1,6 +1,6 @@
 # Overdrive Constitution
 
-**Version:** 1.3.0
+**Version:** 1.4.0
 **Ratified:** 2026-10-26 (repository owner; see Amendment Log)
 **Applies to:** This repository (Overdrive, an AEtherForge Zero Labs
 project): an ISO C23 terminal UI library built with CMake. Instantiated
@@ -28,7 +28,12 @@ constitution direct work.
 `contracts/` (proposed public headers), and `tasks.md`. Each unit of work
 is a GitHub issue that links the feature directory and names the tasks it
 covers; the issue's plan comment is the plan for that unit. "The spec" and
-"the plan" below mean those.
+"the plan" below mean those. Each unit of work lands as one transaction
+(Article XVI), whose OpenSpec change under `openspec/changes/` records
+that transaction's proposal, design, and tasks and is archived when the
+transaction closes. OpenSpec records changes; a feature's requirements
+stay in its Spec Kit `spec.md`, and an OpenSpec artifact that disagrees
+with it is corrected, never followed.
 
 **Subordinate documents.** `OVD-IDENTITY-001` (`docs/identity/`) is the
 approved naming and branding specification; Article XIV makes its naming
@@ -400,17 +405,20 @@ claim, and a claim requires evidence under Article X.
 The project is Lab property and is developed on GitHub under
 AEtherForge Zero Labs.
 
-- **Every change traces to an issue.** One issue, one branch
-  (`<issue-number>-<slug>`), one pull request into `main`. Spec Kit
-  feature directories are written on their own issue like any other
-  change.
+- **Every change traces to an issue.** One issue, one transaction, one
+  pull request into `main`. A transaction is the tx plugin's integrity
+  boundary: `/tx:open` cuts the local branch `tx-<issue-number>-<slug>`
+  from `main`, and `/tx:close` pushes it as
+  `<type>/[<scope>/]<issue-number>-<slug>`, opens the pull request, and
+  squash-merges it through the agent-merge gate below. Spec Kit feature
+  directories are written on their own issue like any other change.
 - **Self-driving by default.** Agents claim, plan, implement, review,
   and merge work without waiting for a human, unless a human is
   *needed* (below). One agent works an issue at a time; the claim is
   recorded on the issue.
 - **Plans precede code.** An issue's plan comment is posted before
-  implementation starts. Agents proceed on their own plan; assumptions in
-  it follow Article IX.
+  implementation starts and links the transaction's OpenSpec change.
+  Agents proceed on their own plan; assumptions in it follow Article IX.
 - **Agent merge.** An agent may merge a pull request into `main` when
   all hold: every required check is green on the PR's head commit; a
   review by an agent session other than the author found no unresolved
@@ -507,3 +515,16 @@ history.
   Art. XVI: agent merge with its gate, the human-needed list, and AI
   disclosure by either trailer. Governance: owner may ratify by explicit
   instruction. MINOR bump: obligations changed, no article removed.
+- 2026-10-26 — v1.4.0 — **Ratified** by the repository owner
+  (NeonSupernova) by explicit instruction: "Amend the rules for tx", then,
+  on the drafted text, "Ratify v1.4.0". Drafted with AI assistance.
+  Reason: the owner adopted claude-automata, whose tx plugin lands every
+  change as a transaction on a `tx-<slug>` branch,
+  pushed as `<type>/[<scope>/]<slug>`, and blocks edits on `main` outside
+  one. Art. XVI's fixed `<issue-number>-<slug>` branch made every
+  transaction a violation. Goal preserved: every change still traces to
+  one issue, one pull request, and the same merge gate; the issue number
+  moves into the transaction's slug. Preamble: OpenSpec changes record
+  transactions, Spec Kit keeps requirements. Art. XVI: transaction
+  branches; the plan comment links the OpenSpec change. MINOR bump: an
+  obligation added, none removed.

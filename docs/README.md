@@ -6,7 +6,7 @@
 | [architecture.md](architecture.md) | Layers, frame lifecycle, rendering model, ownership (planned) |
 | [plan/workstreams.md](plan/workstreams.md) | Issue dependency graph, parallel lanes, human gates |
 | [process/swarm.md](process/swarm.md) | How parallel AI agents claim, build, review, and hand off work |
-| [../.specify/memory/constitution.md](../.specify/memory/constitution.md) | The binding rules (v1.3.0, ratified) |
+| [../.specify/memory/constitution.md](../.specify/memory/constitution.md) | The binding rules (v1.4.0, ratified) |
 | [../.specify/memory/baseline.md](../.specify/memory/baseline.md) | Toolchain and machine baseline |
 
 ## Feature specifications (Spec Kit)

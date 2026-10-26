@@ -28,10 +28,12 @@ gh pr list --state merged --json number,title,closingIssuesReferences
 
 1. Dispatcher labels the issue `agent:claimed` and comments
    `Claimed by <session-id> on <branch>`. One claim per issue.
-2. Worker creates a worktree and branch `<number>-<slug>` from current
-   `main`. Never push a `claude/*` branch.
-3. Worker posts the plan comment (template in `AGENTS.md`) and proceeds;
-   assumptions are documented, not waited on (Art. IX).
+2. Worker creates a worktree and opens the issue's transaction,
+   `/tx:open <number>-<slug>`, from current `main`. Never push a
+   `claude/*` branch.
+3. Worker records the change with `/tx:plan`, posts the plan comment
+   (template in `AGENTS.md`) linking it, and proceeds; assumptions are
+   documented, not waited on (Art. IX).
 4. A worker that halts posts the BLOCKED template and removes
    `agent:claimed`, adding `agent:blocked`.
 
@@ -51,14 +53,15 @@ gh pr list --state merged --json number,title,closingIssuesReferences
 ## Pull requests
 
 - One PR per issue, PR template filled in completely, `Closes #<number>`.
-- Required checks: `ci-ok` (all platforms) and the exported-symbol check.
+- Required checks: `ci-ok` (all platforms), the exported-symbol check,
+  and the tx plugin's `openspec-validate` and `docs-form-check`.
 - The reviewer agent leaves a review comment with a verdict and the
   identity checklist results.
 - After a merge, every open PR rebases on `main` before its next review.
 
 ## Merge authority
 
-Constitution v1.3.0, Art. XVI: **agents merge** when all of these hold —
+Constitution v1.4.0, Art. XVI: **agents merge** when all of these hold —
 
 1. every required check is green on the PR's head commit;
 2. an agent session other than the author reviewed the PR and found no
@@ -69,8 +72,8 @@ Constitution v1.3.0, Art. XVI: **agents merge** when all of these hold —
    `.github/CODEOWNERS`, `.claude/hooks/guard.sh`, `.claude/settings.json`.
 
 `.claude/hooks/guard.sh` checks 1, 3, and 4 mechanically on every
-`gh pr merge`, and refuses `--admin`. Merge with
-`gh pr merge <number> --squash --delete-branch`.
+`gh pr merge`, and refuses `--admin`. `/tx:close` performs the squash
+merge, so the review comes before it.
 
 A human is needed only for the Art. XVI list: constitution changes,
 license/visibility/ownership, publishing, destructive operations,
@@ -80,8 +83,10 @@ ready issues.
 
 **Server-side protection.** On a private repository under the free plan,
 GitHub does not enforce rulesets, so the gate above is enforced only by
-the guard hook and agent discipline. Making it server-enforced needs the
-repository public or a paid plan, which is an owner decision.
+the guard hook and agent discipline; the tx seed reports its ruleset as
+`unsupported` there. Making it server-enforced needs the repository public
+or a paid plan, which is an owner decision; the next `/tx:open` after that
+lands the ruleset.
 
 ## What agents cannot verify
 
