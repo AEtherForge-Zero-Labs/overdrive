@@ -4,7 +4,8 @@ Referenced by the constitution, Article VIII. It says what may be assumed
 on a contributor's development machine. Normative, but amendable without
 constitutional process. The binding rules live in Article VIII: nothing in
 a declared build, test, or CI path assumes anything listed here without
-declaring a minimum version, and AI tooling never enters those paths.
+declaring a minimum version, and AI or dev-assist tooling never enters
+the library's build or test path.
 
 ## Build environment
 

@@ -116,8 +116,9 @@ ELF/Mach-O; `objdump -p` export table on PE) and fails on any without
 framework (Art. VII). Expected screens written as text rows (Art. VI).
 Replay interpreter in `tests/support/`.
 
-**R14 — Branching.** `main` only, protected; issue branches merge through
-PRs. *Rejected:* `develop`/`main` split — nothing to stage yet.
+**R14 — Branching.** `main` only, protected; each issue's tx transaction
+branch merges through one PR (constitution Art. XVI). *Rejected:*
+`develop`/`main` split — nothing to stage yet.
 
 ## D. Owner decisions (2026-10-26)
 
@@ -127,3 +128,5 @@ PRs. *Rejected:* `develop`/`main` split — nothing to stage yet.
 4. Unicode version pin (R5): delegated as a documented assumption to OVD-03.
 5. Repository: `AEtherForge-Zero-Labs/overdrive`, owner `@NeonSupernova`.
 6. claude-automata adopted as the autonomy harness, alongside Spec Kit.
+7. tx transactions carry issue work; OpenSpec records each transaction,
+   Spec Kit keeps requirements (constitution v1.4.0).
