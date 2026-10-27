@@ -19,12 +19,19 @@ All recorded as R38 in `research.md`:
 
 - **Widths are injected.** The caller passes a classifier
   (code point → extender, narrow, wide). The interpreter hard-codes only
-  R15's ZWJ rule. Alternative: private width tables, which would
-  duplicate OVD-03's generated tables and could disagree with them.
+  R15's ZWJ rule. A rendering test passes an independent, hand-written
+  classifier covering only the code points it uses, never `src/unicode`:
+  the oracle must not share the module it checks. Alternative: private
+  width tables, which would duplicate OVD-03's generated tables.
 - **Pending wrap is fatal** whatever DECAWM says, and so is a wide glyph
   that starts in the last column. No C0 control is accepted, so nothing
   can scroll.
-- **The cursor starts unknown**; printing before a CUP fails.
+- **The cursor starts unknown**, and is unknown again after either
+  `?1049` sequence; printing before a CUP fails.
+- **Every escape sequence ends a grapheme**, so a grapheme ending in ZWJ
+  cannot pass the oracle (OVD-08 must handle it).
+- **SGR semantics** per ECMA-48 §8.3.117 and xterm (ASSUMED, as
+  recalled); bold and faint are kept as independent bits.
 - **Exact encodings:** CUP takes two explicit in-range parameters with no
   leading zeros; reset is `CSI 0 m`; ED takes only 2 and requires the
   default SGR state (the erase color is terminal-dependent); a private
@@ -40,5 +47,6 @@ All recorded as R38 in `research.md`:
 
 - [The oracle is stricter than terminals] → intentional; R38 lists every
   rule so OVD-08 can emit to it.
-- [An injected classifier could mis-model widths] → OVD-08 passes one
-  built from `src/unicode`, the R16 policy the canvas uses.
+- [A hand-written classifier could mis-model widths] → it covers only
+  the code points its test uses, each checked by hand against R16;
+  `src/unicode`'s own tables are checked by OVD-03's tests.

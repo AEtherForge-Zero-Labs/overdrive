@@ -415,27 +415,45 @@ and R34 leave the oracle's edges open; it takes the strict side of each,
 so output that depends on terminal-specific behavior fails a test
 instead of passing by luck. Every rendering test inherits these rules:
 - Widths come from a classifier the caller passes (code point →
-  extender, narrow, wide); the oracle never links `src/unicode`, and
-  hard-codes only R15's ZWJ rule. Rendering tests pass one built on the
-  R16 policy.
+  extender, narrow, wide). The oracle must not share the module it
+  checks, so a rendering test passes an independent, hand-written
+  classifier covering only the code points that test uses, applying
+  R16 by hand; it never uses `src/unicode`, whose errors OVD-03's own
+  tests catch. The oracle hard-codes only R15's ZWJ rule.
 - R33: a glyph printed in the pending-wrap state fails whatever DECAWM
   says, and so does a wide glyph starting in the last column. No C0
   control is accepted, so nothing can scroll.
-- The cursor is unknown until the first CUP; printing before it fails.
+- The cursor is unknown until the first CUP and again after `?1049h` or
+  `?1049l` (whether it survives the switch is terminal-dependent,
+  ASSUMED); printing while it is unknown fails.
 - Encodings are exact: CUP has two explicit 1-based in-range
   parameters without leading zeros; reset is `CSI 0 m` (`CSI m` is
   rejected); ED is only `CSI 2 J` and only in the default SGR state,
   because the erase color is terminal-dependent; a DEC private mode
   carries one parameter; colon sub-parameters, attribute-off codes, and
   color values above 255 are rejected.
+- SGR meanings follow ECMA-48 §8.3.117 and the xterm control-sequence
+  reference (90–97 and 100–107 as palette 8–15, `38/48;5;n`,
+  `38/48;2;r;g;b`), as recalled, not re-read (ASSUMED). Bold (1) and
+  faint (2) are one intensity setting in ECMA-48 and terminals differ
+  when both are set; the oracle keeps them as the independent `OvdAttr`
+  bits the canvas holds, so it checks what was emitted, not what a
+  terminal shows for that pair.
+- Every escape sequence ends a grapheme: an extender must follow its
+  base directly in the same write. So a cell whose grapheme ends in ZWJ
+  (R15 allows `a` + ZWJ at the end of a call's text) cannot pass the
+  oracle: the ZWJ would join the next cell's glyph, or join nothing
+  before a sequence or the end of a write, and the oracle rejects both.
+  OVD-08 must handle such cells, in the canvas rule or in the diff.
 - Overwriting one half of a wide glyph makes the other half
   indeterminate, never equal to anything, until it is overwritten:
   terminals disagree on what a split glyph shows.
 - Mode 2026 must alternate `h`, `l`; its place in a frame (R34) is
   checked by the diff tests, not by the oracle. `?1049h` clears the
-  model; `?1049l` makes every cell indeterminate and the cursor unknown
-  (the primary screen is not modeled).
+  model; `?1049l` makes every cell indeterminate (the primary screen is
+  not modeled).
 - Each feed is one write (FR-022): an escape sequence, code point, or
   grapheme may not span two feeds. Code points the canvas never holds
   (R17) are rejected. The first error is sticky and names its byte
-  offset and the offending bytes.
+  offset and the offending bytes; so is a feed of nullptr bytes with a
+  nonzero length.
