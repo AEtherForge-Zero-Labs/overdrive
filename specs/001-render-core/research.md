@@ -356,7 +356,7 @@ never nullptr. Size computations are overflow-checked; overflow is
 `ovd_terminal_create` and in an `ovd_frame_begin` whose size differs from
 the current buffers; nothing else allocates.
 
-**R37 — Allocation dispatch and output buffer (OVD-04).** Assumptions
+**R39 — Allocation dispatch and output buffer (OVD-04).** Assumptions
 where R30–R32 are silent, labeled `assumption`. The issue body's "output
 buffer grows geometrically" predates R30/R31 and is not implemented: the
 buffer never grows.
