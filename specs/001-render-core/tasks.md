@@ -23,8 +23,8 @@ Every behavior task is preceded by its test task, which must be seen failing.
 ## Phase 1 — Primitives (parallel lanes; each depends on OVD-01)
 
 ### OVD-02 Color [P]
-- [ ] T010 [P] [US1] Write `tests/test_color.c`: RGB→256 cube and gray ramp, RGB→16, 256→16, indexed 0–15 passthrough, depth NONE drops colors; SGR encodings for every color kind and attribute; minimal-delta vs reset decisions
-- [ ] T011 [P] [US1] Implement `src/color.h`/`src/color.c`: `ovd_internal` downsampling (R9) and SGR encoder writing into a caller buffer (bounded)
+- [x] T010 [P] [US1] Write `tests/test_color.c`: RGB→256 cube and gray ramp, RGB→16, 256→16, indexed 0–15 passthrough, depth NONE drops colors; SGR encodings for every color kind and attribute; minimal-delta vs reset decisions
+- [x] T011 [P] [US1] Implement `src/color.h`/`src/color.c`: `ovd_internal` downsampling (R9) and SGR encoder writing into a caller buffer (bounded)
 
 ### OVD-03 Unicode [P]
 - [ ] T012 [P] Vendor UCD `EastAsianWidth.txt` and `DerivedGeneralCategory.txt` for the pinned version into `third_party/ucd/` with the Unicode license

@@ -407,3 +407,29 @@ saving and restoring the screen (R26), terminals ignoring mode 2026 when
 unsupported (R34), and the Windows console modes (R28). They are checked
 by hand in real terminals through the manual checklist (OVD-12), and any
 difference found becomes a spec change.
+
+### Color (OVD-02)
+
+**R37 — Color encoding choices.** R8 and R9 leave these open; each takes
+the narrowest reading (issue #3, labeled `assumption`).
+- Both styles are normalized (unknown kind → default, undefined attribute
+  bits dropped) and downsampled for the depth before they are compared; a
+  change the depth cannot show writes nothing.
+- "Attributes only added" means the new set contains the old. Then the
+  SGR is a delta: added attributes, then the foreground if changed, then
+  the background if changed (39/49 return to default). Otherwise it is one
+  sequence starting with parameter 0, then every attribute and every
+  non-default color: ECMA-48 SGR applies parameters in order, so
+  `CSI 0;1 m` equals `CSI 0 m CSI 1 m`. Removal needs the reset because
+  22–29 are outside R7. Attributes go in ascending code order (1, 2, 3,
+  4, 7, 9). The longest sequence is 48 bytes.
+- Indexed 0–15 are written as 30–37/90–97 (40–47/100–107) at every color
+  depth; indexed 16–255 as `38;5;n` at 256 and truecolor (never expanded
+  to RGB); RGB as `38;2;r;g;b` only at truecolor.
+- RGB → 256 considers indices 16–255 only (0–15 follow the theme, so
+  their RGB is unknown): cube levels 0, 95, 135, 175, 215, 255 and gray
+  8 + 10i. RGB and 16–255 → 16 use xterm's default color0–color15
+  values (000000, cd0000, 00cd00, cdcd00, 0000ee, cd00cd, 00cdcd, e5e5e5,
+  7f7f7f, ff0000, 00ff00, ffff00, 5c5cff, ff00ff, 00ffff, ffffff). Ties
+  go to the lowest index. These values are as recalled from xterm's
+  resources and are not observed in a terminal (Art. X).

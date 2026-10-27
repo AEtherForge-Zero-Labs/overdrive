@@ -93,3 +93,6 @@ add_test(NAME check_exports_rejects_generic COMMAND "${CMAKE_COMMAND}"
 
 ovd_add_test(test_core)
 ovd_add_test(test_headers)
+ovd_add_test(test_color)
+# Internal functions are hidden in a shared build; the test compiles its module directly.
+target_sources(test_color PRIVATE "${PROJECT_SOURCE_DIR}/src/color.c")
