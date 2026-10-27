@@ -19,7 +19,9 @@
  * state; printing another glyph in that state fails (whatever DECAWM says),
  * as does a wide glyph that starts in the last column. No C0 control is
  * accepted, so nothing can scroll. The cursor is unknown until the first
- * CUP, and printing while it is unknown fails.
+ * CUP and again after either ?1049 sequence, and printing while it is
+ * unknown fails. Every escape sequence ends the grapheme before it, so an
+ * extender must follow its base directly.
  *
  * Each vt_replay_feed call is one write: an escape sequence, a code
  * point, or a grapheme may not continue into the next call. The first

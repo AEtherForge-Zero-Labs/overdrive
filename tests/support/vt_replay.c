@@ -168,6 +168,8 @@ static bool text(VtReplay *vt, Feed *feed, size_t at, size_t *next)
     }
     if (!test_screen_extend(vt->screen, feed->last_x, feed->last_y,
                             (const char *)feed->bytes + at, size)) {
+        /* The last glyph is always whole here (nothing but a print can
+         * touch it within a write), so the only cause is the length. */
         return reject(vt, feed, at, at + size, "grapheme longer than 15 bytes");
     }
     feed->join_next = code_point == TEST_ZWJ;
@@ -230,7 +232,14 @@ static bool color_param(const uint32_t params[], size_t count, size_t *i, OvdCol
     return false;
 }
 
-/* Applies SGR parameters to a copy of the style; false if any is outside R7. */
+/* Applies SGR parameters to a copy of the style; false if any is outside R7.
+ * Parameter meanings: ECMA-48 8.3.117 (0-9, 30-49) and xterm ctlseqs
+ * (90-97, 100-107 as palette 8-15; 38/48;5;n and 38/48;2;r;g;b), as
+ * recalled, not re-read (ASSUMED). 1 (bold) and 2 (faint) are one
+ * intensity setting in ECMA-48, and terminals differ when both are set;
+ * the model keeps them as the independent OvdAttr bits the canvas holds
+ * (R38), so a cell with both is checked against what was emitted, not
+ * against what a terminal shows. */
 static bool apply_sgr(OvdStyle *style, const uint32_t params[], size_t count)
 {
     OvdStyle next = *style;
@@ -300,15 +309,18 @@ static bool private_mode(VtReplay *vt, Feed *feed, size_t at, size_t end,
         state->autowrap = set;
         return true;
     case 1049:
+        /* Entering clears the alternate screen (xterm ctlseqs); the
+         * primary screen behind it is not modeled. The cursor is unknown
+         * either way: whether it survives the switch is terminal-dependent
+         * (ASSUMED), so the next glyph needs a CUP. */
         state->alternate_screen = set;
         if (set) {
             test_screen_clear(vt->screen);
         } else {
-            /* The primary screen is not modeled. */
             test_screen_forget(vt->screen);
-            state->cursor_known = false;
-            state->pending_wrap = false;
         }
+        state->cursor_known = false;
+        state->pending_wrap = false;
         return true;
     case 2026:
         if (state->synchronized == set) {
@@ -328,6 +340,9 @@ static bool sequence(VtReplay *vt, Feed *feed, size_t at, size_t *next)
 {
     const unsigned char *bytes = feed->bytes;
     const size_t length = feed->length;
+    /* Every escape sequence ends the grapheme before it: an extender after
+     * one has nothing to attach to. */
+    feed->can_extend = false;
     if (at + 1 >= length) {
         return reject(vt, feed, at, length, "truncated escape sequence");
     }
@@ -378,7 +393,6 @@ static bool sequence(VtReplay *vt, Feed *feed, size_t at, size_t *next)
         state->y = (int32_t)values[0] - 1;
         state->x = (int32_t)values[1] - 1;
         state->pending_wrap = false;
-        feed->can_extend = false;
         return true;
     case 'J':
         if (count != 1 || values[0] != 2) {
@@ -389,13 +403,11 @@ static bool sequence(VtReplay *vt, Feed *feed, size_t at, size_t *next)
                           "ED 2 outside the default SGR state (erase color is terminal-dependent)");
         }
         test_screen_clear(vt->screen);
-        feed->can_extend = false;
         return true;
     case 'm':
         if (count == 0 || !apply_sgr(&state->style, values, count)) {
             return reject(vt, feed, at, end, "unsupported SGR");
         }
-        feed->can_extend = false;
         return true;
     default:
         return reject(vt, feed, at, end, "unsupported control sequence");
@@ -407,8 +419,14 @@ bool vt_replay_feed(VtReplay *vt, const void *bytes, size_t length)
     if (vt == nullptr || vt->failed) {
         return false;
     }
-    if (bytes == nullptr) {
-        return length == 0;
+    if (bytes == nullptr && length > 0) {
+        snprintf(vt->error, sizeof vt->error, "byte %lu: nullptr bytes with length %lu",
+                 (unsigned long)vt->consumed, (unsigned long)length);
+        vt->failed = true;
+        return false;
+    }
+    if (length == 0) {
+        return true;
     }
     Feed feed = { .bytes = bytes, .length = length };
     size_t i = 0;

@@ -12,7 +12,6 @@ struct TestScreen {
     TestCell *cells; /* rows * cols, row-major */
 };
 
-
 static TestCell *cell_at(TestScreen *screen, int32_t x, int32_t y)
 {
     return &screen->cells[(size_t)y * (size_t)screen->cols + (size_t)x];

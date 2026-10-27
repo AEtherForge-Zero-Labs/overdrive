@@ -326,6 +326,19 @@ static bool test_erase(void)
 
 static bool test_modes(void)
 {
+    /* Every sequence, private modes included, ends a grapheme. */
+    int extender_failures = 0;
+    const char *const modes[] = { "?25l", "?7l", "?1049h", "?1049l", "?2026h" };
+    for (size_t i = 0; i < sizeof modes / sizeof modes[0]; ++i) {
+        char bytes[32];
+        const int length = snprintf(bytes, sizeof bytes, "\x1b[1;1HA\x1b[%s\xcc\x81", modes[i]);
+        if (!rejects(4, 1, bytes, (size_t)length, "extender")) {
+            fprintf(stderr, "  after %s\n", modes[i]);
+            ++extender_failures;
+        }
+    }
+    CHECK(extender_failures == 0);
+
     VtReplay *vt = vt_replay_create(4, 2, classify);
     CHECK(vt != nullptr);
     CHECK(feed(vt, "\x1b[?25l\x1b[?7l\x1b[?2026h"));
@@ -338,7 +351,7 @@ static bool test_modes(void)
     /* 1049: entering clears the model; leaving forgets it. */
     CHECK(feed(vt, "\x1b[1;1Hab\x1b[?1049h"));
     state = vt_replay_state(vt);
-    CHECK(state.alternate_screen);
+    CHECK(state.alternate_screen && !state.cursor_known);
     const char *const blank[] = { "", "" };
     TestScreen *expected = rows_screen(4, 2, blank, nullptr, nullptr, 0);
     CHECK(expected != nullptr);
@@ -357,6 +370,8 @@ static bool test_modes(void)
     CHECK_REJECTS(4, 1, "\x1b[?25", "truncated");
     CHECK_REJECTS(4, 1, "\x1b[?25x", "\\x1b[?25x");
     CHECK_REJECTS(4, 1, "\x1b[25h", "\\x1b[25h");
+    /* Entering the alternate screen forgets the cursor (strict side, R38). */
+    CHECK_REJECTS(4, 1, "\x1b[1;2H\x1b[?1049hB", "cursor");
     return true;
 }
 
@@ -395,6 +410,15 @@ static bool test_unknown_sequences(void)
     CHECK(strcmp(first, vt_replay_error(vt)) == 0);
     CHECK(strcmp(test_screen_cell(vt_replay_screen(vt), 0, 0)->text, "a") == 0);
     vt_replay_destroy(vt);
+
+    /* nullptr bytes with a nonzero length is a recorded, sticky error. */
+    VtReplay *null_feed = vt_replay_create(4, 1, classify);
+    CHECK(null_feed != nullptr);
+    CHECK(vt_replay_feed(null_feed, nullptr, 0));
+    CHECK(!vt_replay_feed(null_feed, nullptr, 3));
+    CHECK(strstr(vt_replay_error(null_feed), "nullptr") != nullptr);
+    CHECK(!feed(null_feed, "\x1b[1;1Hz"));
+    vt_replay_destroy(null_feed);
     return true;
 }
 
