@@ -311,7 +311,7 @@ t A "canonical merge, surrounding whitespace" "  gh pr merge 5 --squash $MH  "
 t B "no --match-head-commit" 'gh pr merge 5 --squash --delete-branch'
 says "no --match-head-commit" "match-head-commit"
 t B "--match-head-commit names another sha" "gh pr merge 5 --squash --match-head-commit $O"
-says "--match-head-commit names another sha" "head"
+says "--match-head-commit names another sha" "not the --match-head-commit $O"
 t B "--match-head-commit short sha" 'gh pr merge 5 --squash --match-head-commit 1111111'
 t B "--match-head-commit twice" "gh pr merge 5 $MH $MH"
 t B "--match-head-commit=sha" "gh pr merge 5 --squash --match-head-commit=$H"

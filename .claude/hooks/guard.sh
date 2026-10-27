@@ -393,7 +393,7 @@ if (.number // null) != $n then "gh returned PR #\(.number // "?") instead of #\
 elif .state != "OPEN" then "PR #\($n) is \(.state), not open."
 elif .baseRefName != "main" then "PR #\($n) targets \(.baseRefName); agents merge only into main."
 elif ((.headRefOid // "") | test("^[0-9a-f]{40}$") | not) then "PR #\($n) has no readable head commit."
-elif .headRefOid != $want then "PR #\($n)'s head is \(.headRefOid), not the --match-head-commit $want; the branch moved. Review the new head."
+elif .headRefOid != $want then "PR #\($n)'s head is \(.headRefOid), not the --match-head-commit \($want); the branch moved. Review the new head."
 elif ((.url // "") | test("^https://[^/]+/[^/]+/[^/]+/pull/[0-9]+$") | not) then "PR #\($n) has no readable URL."
 elif .isCrossRepository != false or ((.headRepository.nameWithOwner // "") | ascii_downcase) != (base_repo | ascii_downcase)
   then "PR #\($n) comes from another repository; only this repository's branches merge through the agent gate."
