@@ -181,6 +181,14 @@ static void test_ill_formed_utf8(void)
     CASE("\xFF\xF5", { FFFD, 1, true, 1 }, { FFFD, 1, true, 1 });
     CASE("\xF4\x90\x80\x80",
          { FFFD, 1, true, 1 }, { FFFD, 1, true, 1 }, { FFFD, 1, true, 1 }, { FFFD, 1, true, 1 });
+    /* F5..FF never lead, even before trail bytes: one U+FFFD per byte. */
+    for (unsigned lead = 0xF5; lead <= 0xFF; ++lead) {
+        const char text[] = { (char)lead, (char)0x80, (char)0x80, (char)0x80 };
+        const Expected want[] = {
+            { FFFD, 1, true, 1 }, { FFFD, 1, true, 1 }, { FFFD, 1, true, 1 }, { FFFD, 1, true, 1 },
+        };
+        check_case(__LINE__, text, 4, want, 4);
+    }
     /* A valid prefix cut by a non-trail byte: the byte starts anew. */
     CASE("\xE4\xB8" "a", { FFFD, 1, true, 2 }, { "a", 1, false, 1 });
     CASE("\xF0\x9F\x98\xE4\xB8\xAD", { FFFD, 1, true, 3 }, { "\xE4\xB8\xAD", 2, false, 3 });
@@ -278,6 +286,13 @@ static void test_length_limit(void)
     CASE(ACUTE ACUTE ACUTE ACUTE ACUTE ACUTE ACUTE,
          { FFFD ACUTE ACUTE ACUTE ACUTE ACUTE ACUTE, 1, true, 14 });
     CASE(ACUTE ACUTE ACUTE ACUTE ACUTE ACUTE ACUTE ACUTE, { FFFD, 1, true, 16 });
+    /* Exactly 16 bytes, one past the limit: 'a' + 6 marks + U+200B. */
+    CASE("a" ACUTE ACUTE ACUTE ACUTE ACUTE ACUTE "\xE2\x80\x8B" "b",
+         { FFFD, 1, true, 16 }, { "b", 1, false, 1 });
+    /* A replaced base whose cell text reaches 16 bytes: U+FFFD (for FF)
+     * + 5 marks + U+200B, from 14 input bytes. */
+    CASE("\xFF" ACUTE ACUTE ACUTE ACUTE ACUTE "\xE2\x80\x8B" "b",
+         { FFFD, 1, true, 14 }, { "b", 1, false, 1 });
     /* Four-person family: 25 bytes of ZWJ sequence, one U+FFFD. */
     CASE("\xF0\x9F\x91\xA8" ZWJ "\xF0\x9F\x91\xA9" ZWJ "\xF0\x9F\x91\xA7" ZWJ
          "\xF0\x9F\x91\xA6" "a",
