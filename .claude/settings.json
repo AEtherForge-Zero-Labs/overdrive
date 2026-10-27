@@ -23,6 +23,7 @@
       "Edit(//**/.claude/hooks/**)",
       "Edit(//**/.claude/settings.json)",
       "Edit(//**/.claude/settings.local.json)",
+      "Edit(~/.config/gh/**)",
       "Read(~/.config/gh/hosts.yml)"
     ]
   },

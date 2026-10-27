@@ -6,11 +6,20 @@
 # guard or its settings. Exit 2 blocks the command and shows Claude the
 # reason. It complements the deny rules in .claude/settings.json.
 #
-# It fails closed: a missing jq, unreadable hook input, or failed lookup
-# blocks. Detection is broad (quotes and backslashes removed, wrappers
-# such as `bash -c` and `eval` see through); acceptance of merges, pushes,
-# and mutating API calls is one exact shape each. It is a tripwire, not a
-# sandbox: a command assembled at run time can evade any text matcher.
+# It is a tripwire, not a security boundary. A command assembled at run
+# time (a variable, a script file, a pipe into a program) can evade any
+# text matcher. The boundary is the server-side ruleset plus a separate
+# agent identity; see docs/process/swarm.md.
+#
+# Within that limit it fails closed:
+# - a missing jq, unreadable hook input, or failed lookup blocks;
+# - gh and git are parsed per command: an unknown subcommand, a flag
+#   before the subcommand, or an expansion the guard cannot read blocks;
+# - a command that mentions gh, git, an environment dump, .claude, or the
+#   gh configuration may not also use a construct the guard does not
+#   parse (line continuations, $'...', eval, sh -c, and similar);
+# - merges, pushes, and mutating API calls are accepted in one exact
+#   shape each.
 #
 # Portable to macOS /bin/bash 3.2 and BSD tools. Tests:
 # .claude/hooks/test_guard.sh.
@@ -24,6 +33,9 @@ block() {
 }
 
 TEXT_HINT="If the command only mentions this in text, put the text in a file (--body-file, -F, or the Write tool)."
+PLAIN="Use a plain form the guard can read: literal arguments, text in a file (--body-file, -F, or the Write tool), and separate commands instead of substitutions or wrappers."
+SECRET="printing a secret exposes it in the transcript (Art. XIII)."
+HUMAN="a step that needs a human (Art. XVI). Label the issue needs-human."
 
 # ------------------------------------------------------------ hook input
 
@@ -38,19 +50,30 @@ cmd=$(printf '%s' "$input" | jq -j '.tool_input.command') ||
   block "could not read the command from the hook input."
 [ -z "$cmd" ] && exit 0
 
-# ------------------------------------------------------------ word views
+# ------------------------------------------------------------ text views
 
 # norm: quotes and backslashes removed, so `"gh" pr`, `g\h`, and
-# `bash -c "gh pr merge"` read as the words they run.
+# `bash -c "env"` read as the words they run. lnorm: the same, lowercase.
 norm=$(printf '%s' "$cmd" | tr -d "\\\\\"'") || block "could not normalize the command."
 lnorm=$(printf '%s' "$norm" | tr 'A-Z' 'a-z') || block "could not normalize the command."
+nslash=$(printf '%s' "$lnorm" | sed -e 's#//*#/#g' -e 's#/\./#/#g') || block "could not normalize the command."
 flat=$(printf '%s\n' "$norm" | sed 's/[;&|()<>`=,{}$]/ /g') || block "could not split the command."
 lflat=$(printf '%s\n' "$flat" | tr 'A-Z' 'a-z') || block "could not split the command."
 set -f
-W=($flat)  # words, original case; subcommands match case-sensitively
-L=($lflat) # the same words lowercased; program names match case-insensitively
+W=($flat)  # words, original case
+L=($lflat) # the same words lowercased
 set +f
-nw=${#W[@]}
+
+# sens: line continuations joined, then quotes, backslashes, and $
+# removed, lowercase: what the words could become once the shell has
+# expanded them. A command is sensitive if this view names gh, git, an
+# environment dump, a merge or push, .claude, or the gh configuration.
+bsnl=$'\\\n'
+joined=${cmd//"$bsnl"/}
+sens=$(printf '%s' "$joined" | tr -d "\\\\'\"\$" | tr 'A-Z' 'a-z') || block "could not normalize the command."
+re_sens='(^|[^a-z0-9_.-])(gh|git|env|printenv|declare|typeset|export|set|readonly|compgen|eval|merge|push|credential)([^a-z0-9_-]|$)|\.claude|\.config|hosts\.y|token|secret|password'
+is_sens=0
+[[ $sens =~ $re_sens ]] && is_sens=1
 
 trim() {
   local s=$1
@@ -59,46 +82,77 @@ trim() {
   printf '%s' "$s"
 }
 
-# Quote-aware tokens, one per line: W<TAB>word (unquoted), O<TAB>operator,
-# R<TAB>redirection, or X<TAB>unbalanced. Used where command boundaries
-# matter: the read-only check and the gh api parser.
+# --------------------------------------------------- always: secrets
+
+re_env='(^|[[:space:];&|(){}`])([^[:space:];&|(){}`]*/)?(env|printenv)([[:space:]]+(-u[[:space:]]*[^-[:space:];&|(){}`][^[:space:];&|(){}`]*|-[^[:space:];&|(){}`]+))*[[:space:]]*($|[;&|(){}`])'
+re_dump='(^|[;&|(){}`]|[[:space:]]-[a-z]*c[[:space:]]+)[[:space:]]*(export([[:space:]]+-p)?|set|declare([[:space:]]+-[a-z]+)*|typeset([[:space:]]+-[a-z]+)*|readonly([[:space:]]+-p)?)[[:space:]]*($|[;&|(){}`])'
+re_tokvar='\$\{?[a-z0-9_]*(token|secret|password)'
+re_ghcfg='hosts\.y|\.config/+gh($|[^a-z0-9_-])|\.config/+[^/[:space:]]*[]*?[]|\.config/*($|[[:space:];&|)<>])'
+re_environ='(^|[^a-z_])environ([^a-z_]|$)|%env|process\.env|getenv|\$env([^a-z0-9_]|$)'
+[[ $lnorm =~ $re_env ]] && block "env or printenv without a command prints every variable, tokens included; $SECRET"
+[[ $lnorm =~ $re_dump ]] && block "dumping shell variables prints tokens; $SECRET"
+[[ $lnorm =~ $re_tokvar ]] && block "expanding a token variable; $SECRET"
+[[ $lnorm =~ $re_ghcfg ]] && block "the gh configuration holds credentials and aliases; $SECRET"
+[[ $lnorm =~ $re_environ ]] && block "reading the process environment prints tokens; $SECRET"
+case $cmd in *'${!'*) block "indirect expansion (\${!name}) can print any variable, tokens included; $SECRET" ;; esac
+case $lnorm in *dotglob* | *globignore* | *glob_dots* | *globdots*) block "glob options that match hidden files can reach .claude; name paths literally." ;; esac
+
+# ------------------------------------------------------------- tokens
+
+# Quote-aware tokens, one per line: KIND<TAB>FLAGS<TAB>lowercase<TAB>value.
+# KIND is W (word, quotes removed), O (operator), R (redirection), or X
+# (the quotes do not balance). FLAGS on a word: e if it expands ($ or a
+# backtick outside single quotes), s if it substitutes ($( or a
+# backtick), g if it has an unquoted glob character.
 read -r -d '' TOKENIZE <<'JQ' || :
 def unq:
   gsub("'(?<a>[^']*)'"; "\(.a)")
   | gsub("\"(?<a>(?:[^\"\\\\]|\\\\.)*)\""; "\(.a)")
   | gsub("\\\\(?<a>.)"; "\(.a)");
+def flags:
+  gsub("'[^']*'"; "") as $a
+  | (if ($a | test("[$`]")) then "e" else "" end)
+  + (if ($a | test("\\$\\(|`")) then "s" else "" end)
+  + (if ($a | gsub("\"(?:[^\"\\\\]|\\\\.)*\""; "") | gsub("\\\\."; "") | test("[*?\\[]")) then "g" else "" end);
 def re: "(?<o>\\|\\||&&|;;|\\$\\(|<\\(|>\\(|[;&|()`\\n])|(?<r>[0-9]*(?:&>>|&>|>>|>&|>\\||<<<|<<-|<<|<>|<&|>|<))|(?<w>(?:[^\\s'\"\\\\;&|()<>`]|\\\\.|'[^']*'|\"(?:[^\"\\\\]|\\\\.)*\")+)";
 (.tool_input.command | sub("^\\s+"; "") | sub("\\s+$"; "")) as $c
-| if ($c | gsub(re; "") | test("^\\s*$") | not) then "X\tunbalanced"
+| if ($c | gsub(re; "") | test("^\\s*$") | not) then "X\t\tunbalanced\tunbalanced"
   else $c | match(re; "g")
-    | if .captures[0].string != null then "O\t" + .captures[0].string
-      elif .captures[1].string != null then "R\t" + .captures[1].string
-      else "W\t" + (.captures[2].string | unq | gsub("[\\t\\n\\r]"; " ")) end
+    | if .captures[0].string != null then "O\t\t" + .captures[0].string + "\t" + .captures[0].string
+      elif .captures[1].string != null then "R\t\t" + .captures[1].string + "\t" + .captures[1].string
+      else .captures[2].string as $r
+        | ($r | unq | gsub("[\\t\\n\\r]"; " ")) as $v
+        | "W\t" + ($r | flags) + "\t" + ($v | ascii_downcase) + "\t" + $v end
   end
 JQ
 
-tokenized=0
-tokenize() {
-  [ $tokenized = 1 ] && return 0
-  local toks line
-  toks=$(printf '%s' "$input" | jq -r "$TOKENIZE") || block "could not tokenize the command."
-  TK=()
-  TV=()
-  nt=0
-  while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    TK[$nt]=${line%%$'\t'*}
-    TV[$nt]=${line#*$'\t'}
-    nt=$((nt + 1))
-  done <<<"$toks"
-  tokenized=1
-}
+toks=$(printf '%s' "$input" | jq -r "$TOKENIZE") || block "could not tokenize the command."
+TK=()
+TF=()
+TL=()
+TV=()
+nt=0
+has_ops=0
+while IFS= read -r line; do
+  [ -n "$line" ] || continue
+  TK[$nt]=${line%%$'\t'*}
+  rest=${line#*$'\t'}
+  TF[$nt]=${rest%%$'\t'*}
+  rest=${rest#*$'\t'}
+  TL[$nt]=${rest%%$'\t'*}
+  TV[$nt]=${rest#*$'\t'}
+  [ "${TK[$nt]}" = O ] && has_ops=1
+  nt=$((nt + 1))
+done <<<"$toks"
+unbalanced=0
+[ "${TK[0]:-}" = X ] && unbalanced=1
 
 # ------------------------------------------------------ self-protection
 
-# Commands that mention the guard or the Claude settings must be
-# read-only (Art. XVI: weakening the guard hook needs a human).
-ro_fail() { block "only read-only commands may touch the guard hook or the Claude settings (Art. XVI): $1. Read them with the Read tool, cat, grep, sed -n, git diff/log/show, or run .claude/hooks/test_guard.sh."; }
+# Commands that touch the guard, the Claude settings, or the .claude
+# directory as a whole must be read-only (Art. XVI: weakening the guard
+# hook needs a human).
+ro_fail() { block "only read-only commands may touch the guard hook, the Claude settings, or the .claude directory (Art. XVI): $1. Read them with the Read tool, cat, grep, sed -n, git diff/log/show, or run .claude/hooks/test_guard.sh."; }
 
 is_test_script() {
   case $1 in .claude/hooks/test_guard.sh | ./.claude/hooks/test_guard.sh | */.claude/hooks/test_guard.sh) return 0 ;; esac
@@ -163,8 +217,7 @@ ro_segment() {
 
 ro_check() {
   case $cmd in *'$('* | *'`'* | *'<('* | *'>('*) ro_fail "command substitution" ;; esac
-  tokenize
-  [ "${TK[0]:-}" = X ] && ro_fail "unbalanced quotes"
+  [ $unbalanced = 1 ] && ro_fail "unbalanced quotes"
   SEG=()
   local i=0 r target
   while [ $i -lt $nt ]; do
@@ -189,57 +242,52 @@ ro_check() {
   ro_segment
 }
 
-nslash=$(printf '%s' "$lnorm" | sed -e 's#//*#/#g' -e 's#/\./#/#g') || block "could not normalize the command."
 re_p1='\.claude/(hooks|settings)'
 re_p2='guard\.sh|settings(\.local)?\.json'
 re_p3='\.claude/[^[:space:]]*[]*?[{]'
 re_p4='\.claude($|[^a-z0-9_-])'
 re_p5='(^|[^a-z0-9_.-])(hooks|settings)($|[^a-z0-9_.-])'
+re_p6='\.claude/*(\.\.?/*)?($|[[:space:];&|)<>])' # the directory itself
 if [[ $nslash =~ $re_p1 ]] || [[ $nslash =~ $re_p2 ]] || [[ $nslash =~ $re_p3 ]] ||
-  { [[ $nslash =~ $re_p4 ]] && [[ $nslash =~ $re_p5 ]]; }; then
+  [[ $nslash =~ $re_p6 ]] || { [[ $nslash =~ $re_p4 ]] && [[ $nslash =~ $re_p5 ]]; }; then
   ro_check
 fi
 
-# --------------------------------------------------------------- secrets
-
-SECRET="printing a secret exposes it in the transcript (Art. XIII)."
-re_env='(^|[[:space:];&|(){}`])([^[:space:];&|(){}`]*/)?(env|printenv)([[:space:]]+(-u[[:space:]]*[^-[:space:];&|(){}`][^[:space:];&|(){}`]*|-[^[:space:];&|(){}`]+))*[[:space:]]*($|[;&|(){}`])'
-re_dump='(^|[;&|(){}`])[[:space:]]*(export([[:space:]]+-p)?|set|declare[[:space:]]+-[px]+|typeset[[:space:]]+-[px]+)[[:space:]]*($|[;&|(){}`])'
-re_tokvar='\$\{?[a-z0-9_]*(token|secret|password)'
-re_ghcfg='hosts\.yml|\.config/gh($|/|[[:space:]])'
-[[ $lnorm =~ $re_env ]] && block "env or printenv without a command prints every variable, tokens included; $SECRET"
-[[ $lnorm =~ $re_dump ]] && block "dumping shell variables prints tokens; $SECRET"
-[[ $lnorm =~ $re_tokvar ]] && block "expanding a token variable; $SECRET"
-[[ $lnorm =~ $re_ghcfg ]] && block "the gh configuration holds credentials and aliases; $SECRET"
-
-# ------------------------------------------------- gh and git, any form
-
-# gh_next <index>: set j to the next word at or after <index> that is not
-# a global -R/--repo flag or its value. Fails at the end of the words.
-gh_next() {
-  j=$1
-  while [ $j -lt $nw ]; do
-    case ${W[$j]} in
-      -R | --repo) j=$((j + 2)) ;;
-      -R?*) j=$((j + 1)) ;;
-      *) return 0 ;;
-    esac
-  done
-  return 1
-}
-
-HUMAN="that needs a human (Art. XVI). Label the issue needs-human."
-has_gh=0 has_git=0 has_pr=0 has_merge=0 has_push=0 has_api=0
+# A glob in a hidden path component (.cl*, .[c]laude) can reach .claude.
+HIDDEN_GLOB="a glob in a hidden path component can reach .claude or the gh configuration; name the path literally."
+re_hidden='(^|/)(\.[^/]*[]*?[]|\[)'
 i=0
-while [ $i -lt $nw ]; do
-  w=${W[$i]}
-  case $w in
-    pr) has_pr=1 ;;
-    merge) has_merge=1 ;;
-    push) has_push=1 ;;
+while [ $i -lt $nt ]; do
+  if [ "${TK[$i]}" = W ]; then
+    case ${TF[$i]} in
+      *g*) case ${TV[$i]} in '[' | '[[' | ']' | ']]') ;; *) [[ ${TV[$i]} =~ $re_hidden ]] && block "$HIDDEN_GLOB" ;; esac ;;
+    esac
+  fi
+  i=$((i + 1))
+done
+
+# ------------------------------------- sensitive: fail-closed lexing
+
+if [ $is_sens = 1 ]; then
+  case $cmd in
+    *"$bsnl"*) block "a backslash-newline line continuation joins words the guard reads apart. Write the command on one line. $PLAIN" ;;
+    *"\$'"* | *"\$\""*) block "\$'...' and \$\"...\" quoting can spell any word. $PLAIN" ;;
   esac
+  re_extglob='[]*?+@!][(]'
+  [[ $cmd =~ $re_extglob ]] && block "extended globs and glob qualifiers hide which paths a command touches. $PLAIN"
+  [ $unbalanced = 1 ] && block "the quotes in this command do not balance, so the guard cannot read it. $PLAIN"
+fi
+if [ $unbalanced = 1 ]; then
+  re_hidden_text='(^|[/[:space:]=])\.[^/[:space:]]*[]*?[]'
+  [[ $nslash =~ $re_hidden_text ]] && block "$HIDDEN_GLOB"
+  exit 0 # nothing the guard parses is in it
+fi
+
+# ---------------------------------------------------- words anywhere
+
+i=0
+while [ $i -lt ${#L[@]} ]; do
   case ${L[$i]##*/} in
-    git) has_git=1 ;;
     printenv)
       for v in "${L[@]}"; do
         case $v in *token* | *secret* | *key* | *password*) block "$SECRET" ;; esac
@@ -248,79 +296,32 @@ while [ $i -lt $nw ]; do
       for v in "${L[@]}"; do
         case $v in find-*-password) block "reading a keychain password; $SECRET" ;; esac
       done ;;
-    gh)
-      has_gh=1
-      s1= s2=
-      if gh_next $((i + 1)); then
-        s1=${W[$j]}
-        gh_next $((j + 1)) && s2=${W[$j]}
-      fi
-      case "$s1 $s2" in
-        "release create" | "release delete" | "release delete-asset" | "release edit" | "release upload")
-          block "publishing or changing a release is $HUMAN" ;;
-        "repo delete" | "repo edit" | "repo rename" | "repo archive" | "repo unarchive" | "repo transfer")
-          block "deleting the repository or changing its settings, visibility, or ownership is $HUMAN" ;;
-        "issue delete" | "issue transfer") block "deleting or transferring issues is $HUMAN" ;;
-        "label delete" | "label edit") block "deleting or renaming labels is $HUMAN" ;;
-        "workflow disable" | "workflow run") block "disabling or dispatching workflows is $HUMAN" ;;
-        "alias set" | "alias import") block "gh aliases hide commands from the guard." ;;
-      esac
-      case $s1 in
-        secret | variable | org) block "secrets, variables, and org settings are $HUMAN" ;;
-        ruleset) case $s2 in list | view | check | "" | -*) ;; *) block "changing rulesets is $HUMAN" ;; esac ;;
-        auth)
-          [ "$s2" = status ] || block "gh auth other than 'gh auth status' handles credentials; $SECRET"
-          for v in "${W[@]}"; do
-            case $v in --show-token* | -t* | -[a-zA-Z]*t*) block "gh auth status with a token flag; $SECRET" ;; esac
-          done ;;
-        api) has_api=1 ;;
-      esac ;;
   esac
   i=$((i + 1))
 done
 
-if [ $has_git = 1 ]; then
-  for v in "${W[@]}"; do
-    case $v in credential | credential-*) block "git credential prints stored credentials; $SECRET" ;; esac
-  done
-fi
-
-if [ $has_gh = 1 ]; then
-  case $lnorm in *needs-human*)
-    for v in "${W[@]}"; do
-      case $v in --remove-label*) block "removing needs-human is the owner's decision (Art. XVI)." ;; esac
-    done ;;
-  esac
-fi
-
 # ---------------------------------------------------------------- gh api
 
-API_ALLOW="Agents may only comment, label, react, or create a ruleset through gh api (Art. XVI)."
+API_ALLOW="Agents may only comment, label, or react through gh api (Art. XVI)."
 o='[^/]+'
 re_comments="^repos/$o/$o/issues/[0-9]+/comments$"
 re_comment="^repos/$o/$o/issues/comments/[0-9]+$"
 re_labels="^repos/$o/$o/issues/[0-9]+/labels$"
 re_label="^repos/$o/$o/issues/[0-9]+/labels/([^/]+)$"
 re_reacted="^repos/$o/$o/(issues/[0-9]+|issues/comments/[0-9]+|pulls/comments/[0-9]+|comments/[0-9]+)/reactions"
-re_rulesets="^repos/$o/$o/rulesets$"
 
+# api_check <gh word index> <api word index>: the words of this segment
+# after `api` are in SW[<api index>+1 ..]. The method is read from
+# wherever -X/--method appears.
 api_check() {
-  tokenize
-  [ "${TK[0]:-}" = X ] && block "a mutating gh api call must be a plain command; its quotes do not balance."
-  local args=() i=0
-  while [ $i -lt $nt ]; do
-    case ${TK[$i]} in
-      W) args[${#args[@]}]=${TV[$i]} ;;
-      R) i=$((i + 1)) ;;
-      O) block "a mutating gh api call must run alone, not chained, piped, or wrapped. $API_ALLOW" ;;
-    esac
-    i=$((i + 1))
+  local gi=$1 ai=$2 method= fields=0 fromfile=0 endpoint= npos=0 a v q expands=0
+  set --
+  q=$((ai + 1))
+  while [ $q -lt $nsw ]; do
+    set -- "$@" "${TV[${SW[$q]}]}"
+    case ${TF[${SW[$q]}]} in *e*) expands=1 ;; esac
+    q=$((q + 1))
   done
-  [ ${#args[@]} -ge 2 ] && [ "${args[0]}" = gh ] && [ "${args[1]}" = api ] ||
-    block "a mutating gh api call must be a plain 'gh api ...' command (no env prefix, path, global flag, or wrapper). $API_ALLOW"
-  set -- "${args[@]}"
-  shift 2
-  local method= fields=0 fromfile=0 endpoint= npos=0 a v
   while [ $# -gt 0 ]; do
     a=$1
     shift
@@ -351,15 +352,18 @@ api_check() {
   if [ "$endpoint" = graphql ]; then
     case $lnorm in *mutation*) block "GraphQL mutations change repository state outside the guard's allowlist. $API_ALLOW" ;; esac
     [ $fromfile = 1 ] && block "the guard cannot read a GraphQL query from a file; pass it inline with -f query='...'."
+    [ $expands = 1 ] && block "a GraphQL query built from \$-expansion or a substitution hides what it does; pass it inline in single quotes."
     return 0
   fi
   case $method in GET | HEAD) return 0 ;; esac
+  [ $expands = 1 ] && block "a mutating gh api call must use literal arguments, not \$-expansion or substitutions. $PLAIN"
+  [ $gi -eq 0 ] && [ "${TV[0]}" = gh ] && [ $ai -eq 1 ] && [ $has_ops = 0 ] ||
+    block "a mutating gh api call must be a plain 'gh api ...' command run alone (no env prefix, path, global flag, wrapper, chain, or pipe). $API_ALLOW"
   case $method in
     POST)
       [[ $endpoint =~ $re_comments ]] && return 0
       [[ $endpoint =~ $re_labels ]] && return 0
-      [[ $endpoint =~ ${re_reacted}$ ]] && return 0
-      [[ $endpoint =~ $re_rulesets ]] && return 0 ;;
+      [[ $endpoint =~ ${re_reacted}$ ]] && return 0 ;;
     PATCH)
       [[ $endpoint =~ $re_comment ]] && return 0 ;;
     DELETE)
@@ -370,18 +374,8 @@ api_check() {
       fi
       [[ $endpoint =~ ${re_reacted}/[0-9]+$ ]] && return 0 ;;
   esac
-  block "gh api $method $endpoint is not on the guard's allowlist. $API_ALLOW Merges go through 'gh pr merge'; statuses, check runs, dispatches, repository settings, and protection are the owner's."
+  block "gh api $method $endpoint is not on the guard's allowlist. $API_ALLOW Merges go through 'gh pr merge'; statuses, check runs, dispatches, rulesets, repository settings, and protection are the owner's."
 }
-
-if [ $has_api = 1 ]; then
-  for v in "${W[@]}"; do
-    case $v in
-      -X* | -[a-zA-Z]*X* | --method* | -f* | -F* | -[a-zA-Z]*[fF]* | --field* | --raw-field* | --input*)
-        api_check
-        break ;;
-    esac
-  done
-fi
 
 # ----------------------------------------------------------------- merge
 
@@ -389,7 +383,7 @@ fi
 # ownership, and the guard itself.
 reserved='^(\.specify/memory/constitution\.md|LICENSE|\.github/CODEOWNERS|\.claude/hooks/guard\.sh|\.claude/settings\.json)$'
 
-CANON_MERGE="a merge must be exactly 'gh pr merge <N> [--squash|--merge|--rebase] [--delete-branch|-d]', run alone, so the Art. XVI gate checks that PR. $TEXT_HINT"
+CANON_MERGE="a merge must be exactly 'gh pr merge <N> [--squash|--merge|--rebase] [--delete-branch|-d] --match-head-commit <reviewed sha>', run alone, so the Art. XVI gate checks that PR at that head. $TEXT_HINT"
 
 read -r -d '' VIEW_CHECK <<'JQ' || :
 def st: (.conclusion // "") as $c | (if $c == "" then (.state // "PENDING") else $c end) | ascii_upcase;
@@ -399,6 +393,7 @@ if (.number // null) != $n then "gh returned PR #\(.number // "?") instead of #\
 elif .state != "OPEN" then "PR #\($n) is \(.state), not open."
 elif .baseRefName != "main" then "PR #\($n) targets \(.baseRefName); agents merge only into main."
 elif ((.headRefOid // "") | test("^[0-9a-f]{40}$") | not) then "PR #\($n) has no readable head commit."
+elif .headRefOid != $want then "PR #\($n)'s head is \(.headRefOid), not the --match-head-commit $want; the branch moved. Review the new head."
 elif ((.url // "") | test("^https://[^/]+/[^/]+/[^/]+/pull/[0-9]+$") | not) then "PR #\($n) has no readable URL."
 elif .isCrossRepository != false or ((.headRepository.nameWithOwner // "") | ascii_downcase) != (base_repo | ascii_downcase)
   then "PR #\($n) comes from another repository; only this repository's branches merge through the agent gate."
@@ -423,10 +418,10 @@ if all(.[]; type == "array") | not then error("unexpected comments payload") els
 JQ
 
 merge_gate() {
-  local n=$1 view verdict repo head changed pages names count hit issues url labels found
+  local n=$1 want=$2 view verdict repo head changed pages names count hit issues url labels found
   view=$(gh pr view "$n" --json number,state,baseRefName,headRefOid,isCrossRepository,headRepository,url,changedFiles,labels,statusCheckRollup,closingIssuesReferences) ||
     block "could not read PR #$n to check the merge gate (Art. XVI)."
-  verdict=$(printf '%s' "$view" | jq -r --argjson n "$n" "$VIEW_CHECK") ||
+  verdict=$(printf '%s' "$view" | jq -r --argjson n "$n" --arg want "$want" "$VIEW_CHECK") ||
     block "could not parse PR #$n to check the merge gate (Art. XVI)."
   case $verdict in
     OK$'\t'*) ;;
@@ -473,7 +468,7 @@ merge_gate() {
 }
 
 merge_check() {
-  local t a m= d= n
+  local t a m= d= n sha=
   t=$(trim "$cmd")
   case " $lnorm " in *" --admin "*) block "--admin bypasses branch protection; that is a human decision (Art. XVI)." ;; esac
   case " $lnorm " in *" --auto "*) block "--auto merges later, after the gate has looked; $CANON_MERGE" ;; esac
@@ -485,24 +480,35 @@ merge_check() {
   n=${4:-}
   [[ $n =~ ^[1-9][0-9]*$ ]] || block "$CANON_MERGE"
   shift 4
-  for a in "$@"; do
+  while [ $# -gt 0 ]; do
+    a=$1
+    shift
     case $a in
       --squash | --merge | --rebase) [ -z "$m" ] || block "$CANON_MERGE"; m=$a ;;
       --delete-branch | -d) [ -z "$d" ] || block "$CANON_MERGE"; d=$a ;;
+      --match-head-commit)
+        [ -z "$sha" ] && [ $# -ge 1 ] || block "$CANON_MERGE"
+        sha=$1
+        shift
+        [[ $sha =~ ^[0-9a-f]{40}$ ]] || block "--match-head-commit needs the full 40-character lowercase sha of the reviewed head. $CANON_MERGE" ;;
       *) block "$CANON_MERGE" ;;
     esac
   done
-  merge_gate "$n"
+  [ -n "$sha" ] || block "the merge must name the reviewed head with --match-head-commit <sha>, so GitHub refuses it if the branch moves. $CANON_MERGE"
+  merge_gate "$n" "$sha"
 }
-
-[ $has_gh = 1 ] && [ $has_pr = 1 ] && [ $has_merge = 1 ] && { merge_check; exit 0; }
 
 # ------------------------------------------------------------------ push
 
 CANON_PUSH="a push must be exactly 'git [-C <dir>] push [-u|--set-upstream] origin <src>[:<dst>]' or a bare 'git push', run alone. $TEXT_HINT"
 
+gitc() {
+  if [ -n "${cdir:-}" ]; then git -C "$cdir" "$@"; else git "$@"; fi
+}
+
 push_check() {
-  local t cdir= src= dst= srcref d ld remote rsha msha main=0 range log missing rc out
+  local t src= dst= srcref d ld remote rsha msha main=0 range log missing rc out v
+  cdir=
   t=$(trim "$cmd")
   for v in "${W[@]}"; do
     case $v in
@@ -589,10 +595,12 @@ push_check() {
     block "main only changes through pull requests (Art. XVI)."
   fi
 
+  # The range starts at what origin has now, as ls-remote saw it, not at
+  # a possibly stale origin/main.
   if [ -n "$rsha" ]; then
     range=$rsha..$srcref
   elif [ -n "$msha" ]; then
-    range=origin/main..$srcref
+    range=$msha..$srcref
   else
     range=$srcref # the first push, which creates main
   fi
@@ -603,10 +611,305 @@ push_check() {
     block "these commits to push have neither an Assisted-by: nor a Co-Authored-By: trailer: ${missing}Reword them before pushing. If a commit had no AI involvement, ask the human to push it."
 }
 
-gitc() {
-  if [ -n "${cdir:-}" ]; then git -C "$cdir" "$@"; else git "$@"; fi
+# ------------------------------------------------- gh and git, parsed
+
+GH_CMDS=" auth browse codespace discussion gist issue org pr project release repo skill cache run workflow agent-task alias api attestation completion config copilot extension ext extensions gpg-key label licenses preview ruleset search secret ssh-key status variable accessibility actions environment exit-codes formatting mintty reference telemetry "
+GH_FLAT=" api browse status completion licenses accessibility actions environment exit-codes formatting mintty reference telemetry copilot "
+GIT_CMDS=" add am annotate apply archive bisect blame branch bundle cat-file check-attr check-ignore check-mailmap check-ref-format checkout cherry cherry-pick clean clone commit commit-graph commit-tree config count-objects describe diff diff-files diff-index diff-tree difftool fetch for-each-ref format-patch fsck gc grep hash-object help init interpret-trailers log ls-files ls-remote ls-tree maintenance merge merge-base merge-file merge-tree mergetool mktree mv name-rev notes pull push range-diff read-tree rebase reflog remote repack replace rerere reset restore rev-list rev-parse revert rm shortlog show show-branch show-ref sparse-checkout stash status stripspace submodule switch symbolic-ref tag update-index update-ref var verify-commit verify-pack verify-tag version whatchanged worktree write-tree "
+UNREAD="the guard cannot read what a \$-expansion or substitution in a gh or git command expands to."
+
+# SW: the word indices of the current segment; nsw: their count.
+# gh_parse <position in SW> <strict 0|1>
+gh_parse() {
+  local q=$1 strict=$2 j s1= s2= j1 a lv
+  j=$((q + 1))
+  while [ $j -lt $nsw ]; do
+    case ${TV[${SW[$j]}]} in
+      -R | --repo) j=$((j + 2)) ;;
+      -R?* | --repo=*) j=$((j + 1)) ;;
+      *) break ;;
+    esac
+  done
+  # Expansions anywhere in the command head are unreadable.
+  a=$((q + 1))
+  while [ $a -le $((j + 1)) ] && [ $a -lt $nsw ]; do
+    case ${TF[${SW[$a]}]} in *e*) block "$UNREAD $PLAIN" ;; esac
+    a=$((a + 1))
+  done
+  [ $j -lt $nsw ] || return 0
+  s1=${TV[${SW[$j]}]}
+  case $s1 in
+    --version | --help | -h) [ $j -eq $((nsw - 1)) ] || block "gh $s1 takes no subcommand." ; return 0 ;;
+    -*) block "a flag before the gh subcommand ('$s1') hides the command from the guard; put flags after it (only -R/--repo may come first). $PLAIN" ;;
+  esac
+  if [ $strict = 1 ]; then
+    case $GH_CMDS in *" $s1 "*) ;; *) block "'gh $s1' is not a gh command the guard knows; aliases and extensions hide what runs. $PLAIN" ;; esac
+  fi
+  j1=$j
+  j=$((j + 1))
+  while [ $j -lt $nsw ]; do
+    case ${TV[${SW[$j]}]} in
+      -R | --repo) j=$((j + 2)) ;;
+      -R?* | --repo=*) j=$((j + 1)) ;;
+      *) break ;;
+    esac
+  done
+  if [ $j -lt $nsw ]; then
+    s2=${TV[${SW[$j]}]}
+    case ${TF[${SW[$j]}]} in *e*) block "$UNREAD $PLAIN" ;; esac
+    case $GH_FLAT in
+      *" $s1 "*) ;;
+      *) case $s2 in
+           -h | --help) ;;
+           -*) block "a flag between 'gh $s1' and its subcommand ('$s2') hides the command from the guard; put flags after the subcommand. $PLAIN" ;;
+         esac ;;
+    esac
+  fi
+  case "$s1 $s2" in
+    "release create" | "release delete" | "release delete-asset" | "release edit" | "release upload")
+      block "publishing or changing a release is $HUMAN" ;;
+    "repo delete" | "repo edit" | "repo rename" | "repo archive" | "repo unarchive" | "repo transfer" | "repo deploy-key" | "repo create")
+      block "creating or deleting a repository or changing its settings, keys, visibility, or ownership is $HUMAN" ;;
+    "issue delete" | "issue transfer") block "deleting or transferring issues is $HUMAN" ;;
+    "label delete" | "label edit") block "deleting or renaming labels is $HUMAN" ;;
+    "workflow disable" | "workflow run" | "workflow enable") block "disabling, enabling, or dispatching workflows is $HUMAN" ;;
+    "alias set" | "alias import") block "gh aliases hide commands from the guard." ;;
+    "extension install" | "extension upgrade" | "extension exec" | "extension create" | "ext install" | "ext upgrade" | "ext exec" | "ext create" | "extensions install" | "extensions upgrade" | "extensions exec" | "extensions create")
+      block "gh extensions run code the guard cannot see; installing or running one is $HUMAN" ;;
+    "cache delete" | "cache remove") block "deleting Actions caches is $HUMAN" ;;
+    "config set" | "config clear-cache") block "gh config can set a pager, editor, or browser that runs commands; changing it is $HUMAN" ;;
+    "ssh-key add" | "ssh-key delete" | "gpg-key add" | "gpg-key delete") block "changing account keys is $HUMAN" ;;
+    "repo sync")
+      a=$((j + 1))
+      while [ $a -lt $nsw ]; do
+        case ${TV[${SW[$a]}]} in --force* | -[a-zA-Z]*f*) block "gh repo sync --force overwrites a branch, which is $HUMAN" ;; esac
+        a=$((a + 1))
+      done ;;
+  esac
+  case $s1 in
+    secret | variable | org) block "secrets, variables, and org settings are $HUMAN" ;;
+    ruleset) case $s2 in list | view | check | "" | -*) ;; *) block "changing rulesets is $HUMAN" ;; esac ;;
+    auth)
+      [ "$s2" = status ] || block "gh auth other than 'gh auth status' handles credentials; $SECRET"
+      a=$((q + 1))
+      while [ $a -lt $nsw ]; do
+        case ${TV[${SW[$a]}]} in --show-token* | -t* | -[a-zA-Z]*t*) block "gh auth status with a token flag; $SECRET" ;; esac
+        a=$((a + 1))
+      done ;;
+  esac
+  # Removing needs-human is the owner's decision.
+  a=$((q + 1))
+  while [ $a -lt $nsw ]; do
+    case ${TV[${SW[$a]}]} in
+      --remove-label*)
+        lv=
+        local b=$((q + 1))
+        while [ $b -lt $nsw ]; do
+          case ${TF[${SW[$b]}]} in *e*) block "$UNREAD $PLAIN" ;; esac
+          lv="$lv ${TL[${SW[$b]}]}"
+          b=$((b + 1))
+        done
+        case $lv in *needs-human*) block "removing needs-human is the owner's decision (Art. XVI)." ;; esac ;;
+    esac
+    a=$((a + 1))
+  done
+  case "$s1 $s2" in
+    "pr merge") merge_check; exit 0 ;;
+  esac
+  [ "$s1" = api ] && api_check "$q" "$j1"
+  return 0
 }
 
-[ $has_git = 1 ] && [ $has_push = 1 ] && { push_check; exit 0; }
+# git_parse <position in SW> <strict 0|1>
+git_parse() {
+  local q=$1 strict=$2 j a v lv
+  j=$((q + 1))
+  while [ $j -lt $nsw ]; do
+    a=${TV[${SW[$j]}]}
+    case ${TF[${SW[$j]}]} in *e*) block "$UNREAD $PLAIN" ;; esac
+    case $a in
+      -C | --git-dir | --work-tree | --namespace)
+        [ $((j + 1)) -lt $nsw ] || return 0
+        case ${TF[${SW[$((j + 1))]}]} in *e*) block "$UNREAD $PLAIN" ;; esac
+        j=$((j + 2)) ;;
+      -c | --config-env)
+        [ $((j + 1)) -lt $nsw ] || return 0
+        case ${TF[${SW[$((j + 1))]}]} in *e*) block "$UNREAD $PLAIN" ;; esac
+        v=${TL[${SW[$((j + 1))]}]}
+        case $v in alias.* | include.* | includeif.*) block "git aliases and config includes hide commands from the guard; setting them is $HUMAN" ;; esac
+        j=$((j + 2)) ;;
+      -c?* | --config-env=*)
+        v=${TL[${SW[$j]}]}
+        v=${v#-c}
+        v=${v#--config-env=}
+        case $v in alias.* | include.* | includeif.*) block "git aliases and config includes hide commands from the guard; setting them is $HUMAN" ;; esac
+        j=$((j + 1)) ;;
+      --git-dir=* | --work-tree=* | --namespace=* | --exec-path=* | --list-cmds=*) j=$((j + 1)) ;;
+      -p | --paginate | -P | --no-pager | --bare | --no-replace-objects | --literal-pathspecs | --glob-pathspecs | --noglob-pathspecs | --icase-pathspecs | --no-optional-locks | --no-lazy-fetch | --no-advice | --exec-path | --html-path | --man-path | --info-path) j=$((j + 1)) ;;
+      --version | --help | -h | -v) return 0 ;;
+      -*)
+        [ $strict = 1 ] && block "the guard does not know git option '$a'; it fails closed. $PLAIN"
+        return 0 ;;
+      *) break ;;
+    esac
+  done
+  [ $j -lt $nsw ] || return 0
+  a=${TV[${SW[$j]}]}
+  case $a in
+    push) push_check; exit 0 ;;
+    send-pack | http-push | receive-pack) block "'git $a' bypasses the push checks; use the canonical git push." ;;
+    credential | credential-*) block "git credential prints stored credentials; $SECRET" ;;
+    config)
+      v=$((j + 1))
+      while [ $v -lt $nsw ]; do
+        case ${TF[${SW[$v]}]} in *e*) block "$UNREAD $PLAIN" ;; esac
+        lv=${TL[${SW[$v]}]}
+        case $lv in alias.* | include.* | includeif.* | *.alias.* | --file=*alias* | --edit | -e)
+          block "git aliases and config includes hide commands from the guard; setting them is $HUMAN" ;;
+        esac
+        v=$((v + 1))
+      done ;;
+  esac
+  if [ $strict = 1 ]; then
+    case $GIT_CMDS in *" $a "*) ;; *) block "'git $a' is not a git command the guard knows; aliases hide what runs. $PLAIN" ;; esac
+  fi
+  return 0
+}
+
+INTERP_RE='^(python[0-9.]*|pypy[0-9.]*|perl[0-9.]*|ruby[0-9.]*|irb|node|nodejs|deno|bun|php[0-9.]*|lua[0-9.]*|luajit|osascript|pwsh|powershell|tclsh|wish|rscript|julia|groovy|jshell|swift|awk|gawk|nawk|mawk)$'
+SHELL_RE='^(sh|bash|zsh|dash|ksh|mksh|yash|posh|fish|csh|tcsh)$'
+re_ienv='(^|[^a-z0-9_])env([^a-z0-9_]|$)'
+
+# process_segment <first token> <end token, exclusive> <op before> <op after>
+process_segment() {
+  local s=$1 e=$2 before=$3 after=$4 k p pw pf prog a inline=0 q b mode
+  SW=()
+  nsw=0
+  k=$s
+  while [ $k -lt $e ]; do
+    case ${TK[$k]} in
+      W) SW[$nsw]=$k; nsw=$((nsw + 1)) ;;
+      R) [ $((k + 1)) -lt $e ] && [ "${TK[$((k + 1))]}" = W ] && k=$((k + 1)) ;;
+    esac
+    k=$((k + 1))
+  done
+  [ $nsw -gt 0 ] || return 0
+  p=0
+  while [ $p -lt $nsw ] && [[ ${TV[${SW[$p]}]} =~ ^[A-Za-z_][A-Za-z0-9_]*\+?= ]]; do p=$((p + 1)); done
+  [ $p -lt $nsw ] || return 0
+  pw=${TV[${SW[$p]}]}
+  pf=${TF[${SW[$p]}]}
+  case $pf in *e*) block "a command name built from \$-expansion or a substitution hides what runs. $PLAIN" ;; esac
+  case $pf in *g*) case $pw in '[' | '[[') ;; *) block "a command name with a glob hides what runs. $PLAIN" ;; esac ;; esac
+  prog=${TL[${SW[$p]}]}
+  prog=${prog##*/}
+
+  case $prog in
+    git-*)
+      case ${prog#git-} in
+        push | send-pack | http-push | receive-pack) block "'$prog' bypasses the push checks; use the canonical git push." ;;
+        credential*) block "$prog prints stored credentials; $SECRET" ;;
+      esac ;;
+    eval | source | .)
+      [ $is_sens = 1 ] && block "$prog runs text the guard cannot parse. $PLAIN"
+      q=$((p + 1))
+      while [ $q -lt $nsw ]; do
+        case ${TF[${SW[$q]}]} in *e*) block "$prog of an expansion runs text the guard cannot see. $PLAIN" ;; esac
+        q=$((q + 1))
+      done ;;
+    ps)
+      q=$((p + 1))
+      while [ $q -lt $nsw ]; do
+        a=${TV[${SW[$q]}]}
+        case $a in -*E*) block "ps -E prints process environments; $SECRET" ;; esac
+        if [ $q -eq $((p + 1)) ]; then
+          case $a in -*) ;; *e*) block "BSD-style ps e prints process environments; $SECRET" ;; esac
+        fi
+        q=$((q + 1))
+      done
+      case $lnorm in *command_mode*) block "legacy ps mode prints process environments with -e; $SECRET" ;; esac ;;
+  esac
+  if [[ $prog =~ $SHELL_RE ]]; then
+    q=$((p + 1))
+    b=0
+    while [ $q -lt $nsw ]; do
+      a=${TV[${SW[$q]}]}
+      case $a in
+        -*c*) [[ $a =~ ^-[a-zA-Z]*c[a-zA-Z]*$ ]] && inline=1 ;;
+        -* | +*) ;;
+        *) b=1; break ;;
+      esac
+      q=$((q + 1))
+    done
+    if [ $inline = 1 ]; then
+      [ $is_sens = 1 ] && block "$prog -c runs a string the guard cannot parse. Run the command directly. $PLAIN"
+      q=$((p + 1))
+      while [ $q -lt $nsw ]; do
+        case ${TF[${SW[$q]}]} in *e*) block "$prog -c of an expansion runs text the guard cannot see. $PLAIN" ;; esac
+        q=$((q + 1))
+      done
+    elif [ $b = 0 ] && [ "$before" = '|' ] && [ $is_sens = 1 ]; then
+      block "piping text into $prog runs commands the guard cannot parse. $PLAIN"
+    fi
+  elif [[ $prog =~ $INTERP_RE ]]; then
+    [[ $lnorm =~ $re_ienv ]] && block "an interpreter reading ENV prints tokens; $SECRET"
+    if [ $is_sens = 1 ]; then
+      q=$((p + 1))
+      while [ $q -lt $nsw ]; do
+        a=${TV[${SW[$q]}]}
+        case $prog in
+          awk | gawk | nawk | mawk)
+            case ${TL[${SW[$q]}]} in *system* | *getline* | *'|'*) block "awk running commands next to gh, git, or protected paths. $PLAIN" ;; esac ;;
+          *)
+            case $a in
+              --eval* | --print* | --exec* | eval) inline=1 ;;
+              -*) [[ $a =~ ^-[a-zA-Z]*[ceEprx][a-zA-Z]*$ ]] && inline=1 ;;
+            esac ;;
+        esac
+        q=$((q + 1))
+      done
+      [ $inline = 1 ] && block "$prog with inline code runs text the guard cannot parse, next to gh, git, or protected paths. $PLAIN"
+    fi
+  fi
+
+  # Every word that names gh or git starts an invocation the guard parses.
+  q=$p
+  while [ $q -lt $nsw ]; do
+    b=${TL[${SW[$q]}]}
+    b=${b##*/}
+    case $b in
+      gh | git)
+        if [ $q -eq $p ]; then
+          mode=1
+        else
+          case $prog in
+            grep | egrep | fgrep | rg | ag | ack | echo | printf | cat | head | tail | less | more | wc | sed | tr | sort | uniq | cut | jq | which | type | whereis | man | file | stat | ls | diff | cmp | gh | git)
+              mode=0 ;;
+            xargs | parallel | find | fd | watch | sudo | doas | su | ssh | script | unbuffer | flock | chronic | setsid | entr)
+              block "run $b directly, not through $prog: the guard cannot see the arguments $prog adds. $PLAIN" ;;
+            *) mode=1 ;;
+          esac
+        fi
+        case $after in '$(' | '`' | '<(' | '>(') block "$UNREAD $PLAIN" ;; esac
+        if [ $b = gh ]; then gh_parse "$q" "$mode"; else git_parse "$q" "$mode"; fi ;;
+    esac
+    q=$((q + 1))
+  done
+  return 0
+}
+
+i=0
+start=0
+prev_op=
+while [ $i -le $nt ]; do
+  if [ $i -eq $nt ] || [ "${TK[$i]}" = O ]; then
+    op=
+    [ $i -lt $nt ] && op=${TV[$i]}
+    process_segment "$start" "$i" "$prev_op" "$op"
+    prev_op=$op
+    start=$((i + 1))
+  fi
+  i=$((i + 1))
+done
 
 exit 0
