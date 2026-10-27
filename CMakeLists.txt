@@ -113,3 +113,20 @@ if(OVERDRIVE_BUILD_EXAMPLES)
     endif()
     add_subdirectory(examples)
 endif()
+
+# Unicode (OVD-03): range tables generated into the build tree from the
+# vendored UCD by the build itself (Art. II, R5).
+set(overdrive_unicode_tables "${PROJECT_BINARY_DIR}/generated/unicode_tables.h")
+add_custom_command(OUTPUT "${overdrive_unicode_tables}"
+    COMMAND "${CMAKE_COMMAND}"
+        "-DEAST_ASIAN_WIDTH=${PROJECT_SOURCE_DIR}/third_party/ucd/EastAsianWidth.txt"
+        "-DGENERAL_CATEGORY=${PROJECT_SOURCE_DIR}/third_party/ucd/DerivedGeneralCategory.txt"
+        "-DOUTPUT=${overdrive_unicode_tables}"
+        -P "${PROJECT_SOURCE_DIR}/cmake/gen_unicode_tables.cmake"
+    DEPENDS cmake/gen_unicode_tables.cmake
+        third_party/ucd/EastAsianWidth.txt third_party/ucd/DerivedGeneralCategory.txt
+    COMMENT "Generating Unicode tables from the pinned UCD"
+    VERBATIM)
+add_custom_target(ovd_unicode_tables DEPENDS "${overdrive_unicode_tables}")
+target_sources(overdrive PRIVATE src/unicode.c "${overdrive_unicode_tables}")
+target_include_directories(overdrive PRIVATE "${PROJECT_BINARY_DIR}/generated")
