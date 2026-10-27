@@ -36,3 +36,6 @@ CMakeUserPresets.json
 cmake-build-*/
 compile_commands.json
 .cache/
+
+# Agent worktrees (Claude Code creates them inside the checkout)
+.claude/worktrees/

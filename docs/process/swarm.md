@@ -29,7 +29,7 @@ gh pr list --state merged --json number,title,closingIssuesReferences
 1. Dispatcher labels the issue `agent:claimed` and comments
    `Claimed by <session-id> on <branch>`. One claim per issue.
 2. Worker creates a worktree and opens the issue's transaction,
-   `/tx:open <number>-<slug>`, from current `main`. Never push a
+   `/tx:open i<number>-<slug>`, from current `main`. Never push a
    `claude/*` branch.
 3. Worker records the change with `/tx:plan`, posts the plan comment
    (template in `AGENTS.md`) linking it, and proceeds; assumptions are
