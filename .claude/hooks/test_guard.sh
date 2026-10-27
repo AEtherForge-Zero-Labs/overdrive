@@ -299,44 +299,82 @@ for c in \
 done
 
 # --- merges: canonical form only (#19: PR targeting, merge timing) ---
-t A "canonical merge" 'gh pr merge 5 --squash --delete-branch'
+MH="--match-head-commit $H"
+t A "canonical merge" "gh pr merge 5 --squash --delete-branch $MH"
 called "canonical merge looks up exactly PR 5" "gh pr view 5"
 called "canonical merge lists the files of PR 5" "repos/$REPO/pulls/5/files"
 called "canonical merge reads the comments of PR 5" "repos/$REPO/issues/5/comments"
-t A "canonical merge, flags reordered" 'gh pr merge 5 -d --merge'
-t A "canonical merge, rebase" 'gh pr merge 5 --rebase --delete-branch'
-t A "canonical merge, no flags" 'gh pr merge 5'
-t A "canonical merge, surrounding whitespace" '  gh pr merge 5 --squash  '
-t B "number after a flag" 'gh pr merge --squash 17'
-t B "no number" 'gh pr merge --squash'
-t B "URL instead of number" "gh pr merge https://github.com/$REPO/pull/5 --squash"
-t B "global -R before pr" "gh -R $REPO pr merge 5 --squash"
-t B "global --repo before pr" "gh --repo $REPO pr merge 5 --squash"
-t B "--repo= after merge" "gh pr merge 5 --squash --repo=$REPO"
-t B "env prefix" "GH_REPO=$REPO gh pr merge 5 --squash"
-t B "bash -c wrapper" 'bash -c "gh pr merge 5 --squash"'
-t B "eval wrapper" "eval 'gh pr merge 5 --squash'"
-t B "absolute path to gh" '/opt/homebrew/bin/gh pr merge 5 --squash'
-t B "uppercase program name" 'GH pr merge 5 --squash'
-t B "quoted program name" '"gh" pr merge 5 --squash'
-t B "chained after another command" 'git status && gh pr merge 5 --squash'
-t B "chained before another command" 'gh pr merge 5 --squash; echo merged'
-t B "--admin" 'gh pr merge 5 --squash --admin'
+t A "canonical merge, flags reordered" "gh pr merge 5 $MH -d --merge"
+t A "canonical merge, rebase" "gh pr merge 5 --rebase --delete-branch $MH"
+t A "canonical merge, no method" "gh pr merge 5 $MH"
+t A "canonical merge, surrounding whitespace" "  gh pr merge 5 --squash $MH  "
+t B "no --match-head-commit" 'gh pr merge 5 --squash --delete-branch'
+says "no --match-head-commit" "match-head-commit"
+t B "--match-head-commit names another sha" "gh pr merge 5 --squash --match-head-commit $O"
+says "--match-head-commit names another sha" "head"
+t B "--match-head-commit short sha" 'gh pr merge 5 --squash --match-head-commit 1111111'
+t B "--match-head-commit twice" "gh pr merge 5 $MH $MH"
+t B "--match-head-commit=sha" "gh pr merge 5 --squash --match-head-commit=$H"
+t B "number after a flag" "gh pr merge --squash 17 $MH"
+t B "no number" "gh pr merge --squash $MH"
+t B "URL instead of number" "gh pr merge https://github.com/$REPO/pull/5 --squash $MH"
+t B "global -R before pr" "gh -R $REPO pr merge 5 --squash $MH"
+t B "global --repo before pr" "gh --repo $REPO pr merge 5 --squash $MH"
+t B "--repo= after merge" "gh pr merge 5 --squash --repo=$REPO $MH"
+t B "env prefix" "GH_REPO=$REPO gh pr merge 5 --squash $MH"
+t B "bash -c wrapper" "bash -c \"gh pr merge 5 --squash $MH\""
+t B "eval wrapper" "eval 'gh pr merge 5 --squash $MH'"
+t B "command wrapper" "command gh pr merge 5 --squash $MH"
+t B "xargs wrapper" "echo 5 | xargs gh pr merge"
+t B "absolute path to gh" "/opt/homebrew/bin/gh pr merge 5 --squash $MH"
+t B "uppercase program name" "GH pr merge 5 --squash $MH"
+t B "quoted program name" "\"gh\" pr merge 5 --squash $MH"
+t B "chained after another command" "git status && gh pr merge 5 --squash $MH"
+t B "chained before another command" "gh pr merge 5 --squash $MH; echo merged"
+t B "--admin" "gh pr merge 5 --squash --admin $MH"
 says "--admin" "admin"
-t B "--auto" 'gh pr merge 5 --auto --squash'
+t B "--auto" "gh pr merge 5 --auto --squash $MH"
 says "--auto" "auto"
-t B "--subject" 'gh pr merge 5 --squash --subject x'
-t B "--body" "gh pr merge 5 --squash --body 'x'"
-t B "--match-head-commit" "gh pr merge 5 --squash --match-head-commit $H"
-t B "two methods" 'gh pr merge 5 --squash --rebase'
-t B "repeated flag" 'gh pr merge 5 -d -d'
-t B "leading zero number" 'gh pr merge 05 --squash'
-t B "text that mentions a merge" 'gh pr comment 5 --body "ready for gh pr merge"'
-says "text that mentions a merge" "file"
+t B "--subject" "gh pr merge 5 --squash --subject x $MH"
+t B "--body" "gh pr merge 5 --squash --body 'x' $MH"
+t B "two methods" "gh pr merge 5 --squash --rebase $MH"
+t B "repeated flag" "gh pr merge 5 -d -d $MH"
+t B "leading zero number" "gh pr merge 05 --squash $MH"
+t B "merge in an echo" "echo gh pr merge 5 --admin"
+
+# Text that only mentions a merge or a push is not one (review point 6).
+for c in \
+  'gh pr comment 5 --body "ready for gh pr merge"' \
+  'gh pr create --title "chore: merge settings" --body-file /work/b.md' \
+  'gh pr view 29 --comments | grep -n merge' \
+  'gh pr diff 29 | grep merge' \
+  'grep -rn "gh pr merge" docs/' \
+  'grep -rn "git push" docs/' \
+  'git commit -m "docs: explain the merge and push gates"' \
+  'gh pr view 5 --json mergeable,mergeStateStatus' \
+  'gh pr list --state merged' \
+  'git merge --ff-only origin/main' \
+  'git rebase origin/main' \
+  'export CC=clang' \
+  'set -euo pipefail; cmake --preset debug' \
+  'git log --oneline -5 | grep -i push' \
+  'gh issue list --search "push" --json number' \
+  'gh --version' \
+  'git --no-pager log -1 --format=%H' \
+  'command -v gh' \
+  'gh api graphql -f query='"'"'query($n: Int!) { repository(owner: "o", name: "r") { pullRequest(number: $n) { title } } }'"'"' -F n=5' \
+  "awk '{print \$1}' /work/list.txt" \
+  'python3 -m venv .venv' \
+  'ps -o pid,command -p 1' \
+  '[ -f /work/x ] && echo yes' \
+  "IFS=\$'\\n' read -r a b < /work/x"; do
+  t A "not a merge or push: $c" "$c"
+  no_calls "not a merge or push: $c"
+done
 
 # --- the merge gate on PR 5 ------------------------------------------
 gate() { # gate <A|B> <description>: run the canonical merge on the current fixture
-  t "$1" "gate: $2" 'gh pr merge 5 --squash --delete-branch'
+  t "$1" "gate: $2" "gh pr merge 5 --squash --delete-branch $MH"
 }
 new_fx g; edit pr_view.json '.state = "CLOSED"'; gate B "PR not open"
 new_fx g; edit pr_view.json '.baseRefName = "release"'; gate B "base is not main"
@@ -399,14 +437,14 @@ new_fx g; rm "$fx/comments.json"; gate B "comment lookup fails"
 # --- pushes (#19: push to main, --all/--prune, trailers) -------------
 new_fx p
 t A "push src:dst to a new branch" 'git push -u origin tx-5-x:feat/5-x'
-called "new branch: commits since origin/main" "range origin/main..tx-5-x"
+called "new branch: commits since the main sha ls-remote saw" "range $M..tx-5-x"
 t A "push to an existing branch" 'git push origin tx-5-x:feat/9-y'
 called "existing branch: commits since the remote tip" "range $O..tx-5-x"
 t A "push --set-upstream" 'git push --set-upstream origin tx-5-x:feat/5-x'
 t A "push a branch by name" 'git push origin feature'
-called "branch by name: its own commits" "range origin/main..feature"
+called "branch by name: its own commits" "range $M..feature"
 t A "push HEAD" 'git push -u origin HEAD'
-called "push HEAD: current branch" "range origin/main..HEAD"
+called "push HEAD: current branch" "range $M..HEAD"
 t A "push with -C" 'git -C /work/repo push -u origin tx-5-x:feat/5-x'
 t A "bare push to its upstream" 'git push'
 called "bare push: commits since the upstream tip" "range $O..tx-5-x"
@@ -422,7 +460,7 @@ t B "a pushed commit without a trailer" 'git push -u origin tx-5-x:feat/5-x'
 says "a pushed commit without a trailer" "def5678"
 
 new_fx p
-printf 'def5678\t\tfix: y\n' >"$fx/log@origin_main..feature"
+printf 'def5678\t\tfix: y\n' >"$fx/log@$M..feature"
 t B "trailer check covers the pushed source, not HEAD" 'git push -u origin feature:feat/5-x'
 
 new_fx p; rm "$fx/log"; t B "git log fails" 'git push -u origin tx-5-x:feat/5-x'
@@ -487,9 +525,7 @@ for c in \
   "gh api -X DELETE repos/$REPO/issues/5/labels/agent:claimed" \
   "gh api repos/$REPO/issues/5/reactions -f content=+1" \
   "gh api repos/$REPO/issues/comments/123/reactions -f content=heart" \
-  "gh api -X DELETE repos/$REPO/issues/comments/123/reactions/9" \
-  "gh api --method=POST repos/$REPO/rulesets --input /work/ruleset.json" \
-  "gh api --method POST /repos/$REPO/rulesets --input /work/ruleset.json"; do
+  "gh api -X DELETE repos/$REPO/issues/comments/123/reactions/9"; do
   t A "allowlisted api: $c" "$c"
   no_calls "allowlisted api: $c"
 done
@@ -520,7 +556,9 @@ for c in \
   "gh -R $REPO api -X PATCH repos/$REPO -f visibility=private" \
   "gh api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'" \
   "gh api graphql -F query=@/work/q.graphql" \
-  "gh api -X GET graphql -f query='mutation { x }'"; do
+  "gh api -X GET graphql -f query='mutation { x }'" \
+  "gh api --method=POST repos/$REPO/rulesets --input /work/ruleset.json" \
+  "gh api --method POST /repos/$REPO/rulesets --input /work/ruleset.json"; do
   t B "api: $c" "$c"
 done
 
@@ -656,6 +694,128 @@ for c in \
   './bash -n .claude/hooks/guard.sh' \
   '.claude/hooks/guard.sh < /work/in.json'; do
   t B "modifies protected: $c" "$c"
+done
+
+# --- security review probes (B1-B7 and the other gaps) ---------------
+# Each probe ran on the reviewed head and exited 0. PROBE_LOG=<file>
+# records "<id><TAB><exit>" per probe, for the before/after table.
+probe() { # probe <id> <command>
+  t B "probe $1: $2" "$2"
+  [ -n "${PROBE_LOG:-}" ] && printf '%s\t%s\n' "$1" "$rc" >>"$PROBE_LOG"
+  return 0
+}
+R=$REPO
+new_fx probes
+# B1: a global flag before the subcommand hides it from the guard.
+probe B1.1 "gh --method=PUT api repos/$R/pulls/5/merge"
+probe B1.2 "gh --jq=. api -X PUT repos/$R/pulls/5/merge"
+probe B1.3 "gh --jq=. api graphql -f query='mutation { mergePullRequest(input:{pullRequestId:\"x\"}) { clientMutationId } }'"
+probe B1.4 "gh --method=POST api repos/$R/statuses/abc -f state=success -f context=guard-tests"
+probe B1.5 "gh --method=DELETE api repos/$R"
+probe B1.6 "gh --method=DELETE api repos/o/r/issues/5/labels/needs-human"
+probe B1.7 "gh --yes=true repo delete $R"
+probe B1.8 'gh --visibility=private --accept-visibility-change-consequences=true repo edit'
+probe B1.9 'gh --notes=x release create v1'
+probe B1.10 'gh --body=x secret set FOO'
+probe B1.11 'gh --yes=true issue delete 5'
+probe B1.12 'gh --yes=true label delete needs-human'
+probe B1.13 'gh --ref=main workflow run guard'
+probe B1.14 'gh --hostname=github.com auth token'
+probe B1.15 'gh --hostname=github.com auth status --show-token'
+# B2: backslash-newline joins words the guard read apart.
+probe B2.1 $'gh pr mer\\\nge 5 --admin'
+probe B2.2 $'git pu\\\nsh origin +tx:main'
+probe B2.3 $'gh api -X PUT repos/o/r/pulls/5/me\\\nrge'
+probe B2.4 $'printen\\\nv'
+probe B2.5 $'e\\\nnv'
+# B3: ANSI-C and locale quoting.
+probe B3.1 "gh pr \$'\\x6derge' 5 --admin"
+probe B3.2 "gh pr \$'\\155erge' 5 --admin"
+probe B3.3 "gh pr m\$'e'rge 5 --admin"
+probe B3.4 "git p\$''ush origin tx:main --force"
+probe B3.5 "git pu\$'\\x73'h origin +tx:main"
+probe B3.6 "git config alias.pu \$'pu\\x73h'"
+probe B3.7 "gh issue edit 5 --remove-label needs-hu\$''man"
+probe B3.8 "gh pr \$\"merge\" 5 --admin"
+# B4: a GraphQL query from a command substitution.
+probe B4.1 'gh api graphql -f query="$(cat q.graphql)"'
+probe B4.2 'gh api graphql -f query=`cat q.graphql`'
+# B5: git aliases.
+probe B5.1 "git config alias.m '!gh pr merge 5 --admin'"
+probe B5.2 "git config --global alias.p 'push origin +HEAD:main'"
+probe B5.3 'git -c alias.p=push p origin tx:main'
+probe B5.4 'git -c include.path=/work/evil.cfg status'
+probe B5.5 'git m'
+# B6: the .claude directory as a whole, and globs that reach it.
+probe B6.1 'mv /work/overdrive/.claude /work/x'
+probe B6.2 'rm -rf /work/overdrive/.claude'
+probe B6.3 'cp -R /work/evil/.claude /work/overdrive/'
+probe B6.4 'git -C /work/overdrive checkout 0123abc -- .claude'
+probe B6.5 'cp /work/g /work/overdrive/.cl*/ho*/gu*'
+probe B6.6 'cd /work/overdrive/.cl* && cp /work/g ho*/gu*'
+probe B6.7 'rm -rf .claude/'
+probe B6.8 'cp /work/g /work/overdrive/.[c]laude/hooks/x'
+# B7: environment dumps.
+probe B7.1 'declare'
+probe B7.2 'typeset'
+probe B7.3 'bash -c set'
+probe B7.4 "sh -c 'declare'"
+probe B7.5 'bash -c export'
+probe B7.6 'x=GH_TOKEN; echo ${!x}'
+probe B7.7 "python3 -c 'import os; print(os.environ)'"
+probe B7.8 "perl -e 'print %ENV'"
+probe B7.9 "node -e 'console.log(process.env)'"
+probe B7.10 'ps -E -p $$'
+probe B7.11 'ps eww'
+probe B7.12 "ruby -e 'p ENV'"
+probe B7.13 'cat /proc/self/environ'
+probe B7.14 "jq -n '\$ENV'"
+probe B7.15 'readonly -p'
+# Other gaps from the review.
+probe G.1 'cat ~/.config/g*/hosts.y*'
+probe G.2 "gh repo sync $R --force"
+probe G.3 'gh extension install x/y'
+probe G.4 'gh cache delete --all'
+probe G.5 "gh api -X POST repos/o/r/rulesets"
+probe G.6 'git send-pack origin tx:main'
+probe G.7 'gh ext install x/y'
+probe G.8 'cat ~/.config/*/hosts.yml'
+probe G.9 'git credential-osxkeychain get'
+
+# --- fail-closed lexing beyond the probes ----------------------------
+for c in \
+  'gh pr view 5 $(echo --web)' \
+  'git log $(git merge-base origin/main HEAD)..HEAD' \
+  'gh $SUB 5' \
+  'gh pr $VERB 5' \
+  'git $VERB origin tx:main' \
+  "\$'\\x65nv'" \
+  '$CMD' \
+  '`echo env`' \
+  'echo gh pr merge 5 | sh' \
+  "osascript -e 'do shell script \"gh pr merge 5\"'" \
+  "awk 'BEGIN { system(\"gh pr merge 5\") }'" \
+  'find . -name x -exec gh pr merge 5 \;' \
+  'gh co 5' \
+  'gh mm 5' \
+  'gh pr --admin merge 5' \
+  'git frobnicate' \
+  'git --config-env=alias.p=X p' \
+  'git config include.path /work/x' \
+  "gh config set pager 'sh -c id'" \
+  'shopt -s dotglob; cp /work/g /work/overdrive/*/hooks/guard.sh'; do
+  t B "unparsed: $c" "$c"
+done
+
+# --- the settings beside the guard -----------------------------------
+settings=$here/../settings.json
+for rule in 'Edit(~/.config/gh/**)' 'Read(~/.config/gh/hosts.yml)' 'Edit(//**/.claude/hooks/**)' 'Edit(//**/.claude/settings.json)'; do
+  if jq -e --arg r "$rule" '.permissions.deny | index($r) != null' "$settings" >/dev/null 2>&1; then
+    pass=$((pass + 1))
+  else
+    fail=$((fail + 1))
+    printf 'FAIL: settings.json does not deny %s\n' "$rule"
+  fi
 done
 
 # ============================================================== summary
