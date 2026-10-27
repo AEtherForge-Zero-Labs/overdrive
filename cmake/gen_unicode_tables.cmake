@@ -9,7 +9,11 @@
 # inclusive code point ranges:
 #   ovd_unicode_wide_ranges      East_Asian_Width W or F, including any
 #                                @missing default of W or F (R16)
-#   ovd_unicode_extender_ranges  General_Category Mn, Me, or Cf (R15)
+#   ovd_unicode_extender_ranges  General_Category Mn, Me, or Cf. This
+#                                includes the R17 bidi controls (all Cf);
+#                                src/unicode.c replaces those before it
+#                                consults this table, so R15's extenders
+#                                are this table minus the bidi controls.
 cmake_minimum_required(VERSION 3.28)
 
 # The pinned Unicode version (research R5, R17, decision log §D.4). Change it
