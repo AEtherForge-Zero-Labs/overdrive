@@ -33,8 +33,8 @@ Every behavior task is preceded by its test task, which must be seen failing.
 - [ ] T015 [P] [US1] Implement `src/unicode.h`/`src/unicode.c`: next-grapheme iterator returning bytes, width, and replacement flag (R15–R17)
 
 ### OVD-04 Allocation and output buffer [P]
-- [ ] T016 [P] Write `tests/test_alloc.c` (part 1): counting/failing test allocator in `tests/support/test_alloc.{c,h}`; output buffer is allocated once to a requested capacity, refuses appends past it without writing, resets for reuse; allocator dispatch rejects size 0 and overflow; resize helper allocates all new blocks before releasing old ones (R30–R32)
-- [ ] T017 [P] Implement `src/alloc.h`/`src/alloc.c` (default and user allocator dispatch with overflow-checked sizes) and `src/output.h`/`src/output.c` (`OvdOutput` with fixed capacity per size, bounded append, reset; R30)
+- [x] T016 [P] Write `tests/test_alloc.c` (part 1): counting/failing test allocator in `tests/support/test_alloc.{c,h}`; output buffer is allocated once to a requested capacity, refuses appends past it without writing, resets for reuse; allocator dispatch rejects size 0 and overflow; resize helper allocates all new blocks before releasing old ones (R30–R32)
+- [x] T017 [P] Implement `src/alloc.h`/`src/alloc.c` (default and user allocator dispatch with overflow-checked sizes) and `src/output.h`/`src/output.c` (`OvdOutput` with fixed capacity per size, bounded append, reset; R30)
 
 ### OVD-05 Replay interpreter (test support) [P]
 - [ ] T018 [P] Write `tests/support/vt_replay.{c,h}`: applies the R7 subset to a text screen model with styles; rejects any sequence outside the subset (so unexpected output fails tests); models autowrap on with deferred wrap and fails on printing in pending-wrap state or on any scroll (R33); `tests/support/screen.{c,h}` renders expected screens from text rows (Art. VI)

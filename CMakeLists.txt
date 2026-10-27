@@ -113,3 +113,5 @@ if(OVERDRIVE_BUILD_EXAMPLES)
     endif()
     add_subdirectory(examples)
 endif()
+
+target_sources(overdrive PRIVATE src/alloc.c src/output.c)
