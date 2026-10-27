@@ -81,22 +81,33 @@ Constitution v1.4.2, Art. XVI: **agents merge** when all of these hold —
 The only merge command is the canonical form, run alone:
 
 ```bash
-gh pr merge <N> [--squash|--merge|--rebase] [--delete-branch|-d]
+gh pr merge <N> [--squash|--merge|--rebase] [--delete-branch|-d] --match-head-commit <sha>
 ```
 
-`.claude/hooks/guard.sh` blocks every other spelling of a merge (flags
-before the number, `-R`, an env prefix, `bash -c`, `--auto`, `--admin`,
-the merge API, a GraphQL mutation). For the canonical form, it checks PR
-`<N>`: it is open against `main` from this repository, its checks are
-all green, it changes no reserved path (renames included), neither it
-nor its closing issues carry `needs-human`, and a member's comment says
-`Review-Verdict: PASS` with `Reviewed-Head:` equal to the PR's current
-head, with no `FAIL` for that head. `/tx:close` performs the squash merge
-in this form, so the review comes before it. The squash title is the PR
-title.
+`<sha>` is the full head commit the review names. `.claude/hooks/guard.sh`
+blocks every other spelling of a merge (flags before the number, `-R`,
+an env prefix, a wrapper such as `bash -c` or `xargs`, `--auto`,
+`--admin`, the merge API, a GraphQL mutation). For the canonical form,
+it checks PR `<N>`: it is open against `main` from this repository, its
+head is `<sha>`, its checks are all green, it changes no reserved path
+(renames included), neither it nor its closing issues carry
+`needs-human`, and a member's comment says `Review-Verdict: PASS` with
+`Reviewed-Head:` equal to that head, with no `FAIL` for it. GitHub then
+refuses the merge if the branch moved after the check. `/tx:close`
+performs the squash merge in this form, so the review comes before it.
+The squash title is the PR title.
 
 Pushes are allowed only as `git [-C <dir>] push [-u] origin <src>[:<dst>]`
 or a bare `git push`. Only the owner removes `needs-human`.
+
+The guard parses every gh and git command in a command line. Text in
+arguments is only text: a title or a grep pattern that says "merge" is
+not a merge. It blocks what it cannot read: an unknown gh or git
+subcommand, a flag before the subcommand, a git alias, a `$`-expansion
+or substitution where the subcommand goes, and, in any command that
+names gh, git, an environment dump, `.claude`, or the gh configuration,
+line continuations, `$'…'`, `eval`, `sh -c`, and inline interpreter
+code.
 
 A human is needed only for the Art. XVI list: constitution changes,
 license/visibility/ownership, publishing, destructive operations,
@@ -113,8 +124,16 @@ through the API unable to satisfy them; rulesets are the owner's to
 create and change. Everything else
 in the gate holds only because the guard hook runs: the review verdict,
 `needs-human`, reserved paths, commit trailers, and the human-needed
-commands. The guard reads command text. A command built at run time can
-evade it, so it is a tripwire, not a sandbox.
+commands.
+
+**The guard is a tripwire, not a security boundary.** It reads command
+text. A command assembled at run time (from a variable, a script file,
+or a pipe into a program) can evade it, and so can any process that
+does not go through Claude Code's Bash tool. It catches mistakes and
+plain attempts; it does not stop a determined agent. The boundary is the
+server-side ruleset plus a separate agent identity: agents on their own
+account or GitHub App, without admin rights, so the server itself
+refuses what an agent may not do.
 
 The remaining gap is identity. The owner and every agent use one GitHub
 account, so the server cannot tell an agent's merge from the owner's, and
@@ -123,10 +142,15 @@ request). Closing it needs the owner: agents on a bot account or a
 GitHub App without admin rights, and CODEOWNERS review required on the
 reserved paths.
 
-**Who changes the guard.** `.claude/hooks/` and the Claude settings files
-are protected twice. Edit and Write deny rules cover them, and the guard
-blocks any Bash command that mentions them unless it is read-only. Only
-the owner changes the guard.
+**Who changes the guard.** Art. XVI makes weakening the guard
+human-needed, and `.claude/hooks/guard.sh` and `.claude/settings.json`
+are owner-reserved paths, so a pull request that changes them needs the
+owner's merge. Edit deny rules cover `.claude/hooks/`, the Claude
+settings files, and the gh configuration, and the guard blocks any Bash
+command that touches the hooks, the settings, or the `.claude` directory
+as a whole unless it is read-only. Like the rest of the guard, these
+are tripwires: they keep agents from changing the guard by accident or
+in plain sight, not from every way a process can write a file.
 
 ## What agents cannot verify
 
