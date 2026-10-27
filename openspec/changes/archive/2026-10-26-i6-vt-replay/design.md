@@ -15,7 +15,7 @@ modeling the primary screen behind mode 1049; a resizable screen.
 
 ## Decisions
 
-All recorded as R37 in `research.md`:
+All recorded as R38 in `research.md`:
 
 - **Widths are injected.** The caller passes a classifier
   (code point → extender, narrow, wide). The interpreter hard-codes only
@@ -38,7 +38,7 @@ All recorded as R37 in `research.md`:
 
 ## Risks / Trade-offs
 
-- [The oracle is stricter than terminals] → intentional; R37 lists every
+- [The oracle is stricter than terminals] → intentional; R38 lists every
   rule so OVD-08 can emit to it.
 - [An injected classifier could mis-model widths] → OVD-08 passes one
   built from `src/unicode`, the R16 policy the canvas uses.

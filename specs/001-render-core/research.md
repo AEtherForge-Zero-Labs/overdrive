@@ -410,7 +410,7 @@ difference found becomes a spec change.
 
 ### Replay oracle (OVD-05)
 
-**R37 — The replay interpreter is stricter than any terminal.** R7, R33,
+**R38 — The replay interpreter is stricter than any terminal.** R7, R33,
 and R34 leave the oracle's edges open; it takes the strict side of each,
 so output that depends on terminal-specific behavior fails a test
 instead of passing by luck. Every rendering test inherits these rules:

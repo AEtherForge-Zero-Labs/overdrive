@@ -1,7 +1,7 @@
 /*
  * Test-only replay interpreter: applies Overdrive's terminal output to a
  * screen model, accepting exactly the protocol the library may emit
- * (research R7, R33, R34, R37) and rejecting everything else, so
+ * (research R7, R33, R34, R38) and rejecting everything else, so
  * unexpected output fails the test that produced it.
  *
  * Accepted, and nothing more:

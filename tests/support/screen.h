@@ -17,7 +17,7 @@
  *
  * Glyph widths come from the caller's classifier, not from src/unicode:
  * the oracle must not share the module it checks, and this keeps the
- * screen independent of the Unicode tables (research R37).
+ * screen independent of the Unicode tables (research R38).
  */
 #ifndef OVERDRIVE_TEST_SCREEN_H
 #define OVERDRIVE_TEST_SCREEN_H

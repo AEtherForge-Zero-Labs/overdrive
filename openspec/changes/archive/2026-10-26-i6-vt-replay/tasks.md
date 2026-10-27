@@ -6,7 +6,7 @@
 
 - [x] 2.1 Implement `tests/support/screen.{c,h}` (model, rows, compare, dump)
 - [x] 2.2 Implement `tests/support/vt_replay.{c,h}` (R7 subset, R33, R34 markers)
-- [x] 2.3 Record R37 in `research.md`; tick T018 and T019 in `tasks.md`
+- [x] 2.3 Record R38 in `research.md`; tick T018 and T019 in `tasks.md`
 
 ## 3. Proof
 

@@ -19,7 +19,7 @@ share code with.
 - `tests/test_vt_replay.c`: the interpreter's own tests.
 - `tests/CMakeLists.txt`: append-only lines for the support library and
   the test.
-- `specs/001-render-core/research.md`: R37, the oracle's decisions where
+- `specs/001-render-core/research.md`: R38, the oracle's decisions where
   R7, R33, and R34 are silent.
 
 ## Capabilities
@@ -35,4 +35,4 @@ None in OpenSpec.
 ## Impact
 
 Test-only code; nothing is added to the library or its public headers.
-OVD-08 must emit output this oracle accepts (R37).
+OVD-08 must emit output this oracle accepts (R38).

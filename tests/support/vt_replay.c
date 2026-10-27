@@ -1,4 +1,4 @@
-/* Test-only replay interpreter; see vt_replay.h and research R7, R33, R34, R37. */
+/* Test-only replay interpreter; see vt_replay.h and research R7, R33, R34, R38. */
 #include "vt_replay.h"
 
 #include <stdio.h>
