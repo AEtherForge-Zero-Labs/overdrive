@@ -10,15 +10,15 @@ Every behavior task is preceded by its test task, which must be seen failing.
 
 ## Phase 0 — OVD-01 Build skeleton, CI, public headers, core (blocks everything)
 
-- [ ] T001 Create `CMakeLists.txt`: C23, extensions off, `-Wall -Wextra -Wpedantic -Werror` (GCC/Clang), target `overdrive` + alias `overdrive::overdrive`, `C_VISIBILITY_PRESET hidden`, `OVERDRIVE_BUILDING`/`OVERDRIVE_SHARED` definitions, options `OVERDRIVE_BUILD_TESTS`, `OVERDRIVE_BUILD_EXAMPLES`, compiler-version check per baseline
-- [ ] T002 Create `CMakePresets.json`: `debug`, `release`, `debug-clang`, `shared`, `windows-cross-debug` (MinGW + Wine emulator); test presets with `noTestsAction: error`
-- [ ] T003 Copy the approved contract headers into `include/overdrive/` unchanged (`overdrive.h`, `core.h`, `terminal.h`, `render.h`) — contract freeze point
-- [ ] T004 Create `tests/CMakeLists.txt` with `ovd_add_test(<name>)` helper (one line per test, append-only)
-- [ ] T005 Write `tests/test_core.c`: result names for every enumerator and an out-of-range value; `ovd_version()` equals header macros
-- [ ] T006 Implement `src/core.c`: `ovd_result_name`, `ovd_version`
-- [ ] T007 Create `cmake/check_exports.cmake` and a `check_exports` CTest: fail on any exported symbol without `ovd_` (nm for ELF/Mach-O, objdump export table for PE) (FR-040)
-- [ ] T008 Create `.github/workflows/ci.yml`: Linux GCC 14 debug+release, Linux Clang debug, macOS Apple Clang debug, MinGW cross + Wine; each runs the presets' configure/build/test; one `ci-ok` aggregate job
-- [ ] T009 Add a header self-containment test: each public header compiles alone (`tests/test_headers.c` + generated per-header TUs in the build tree) and contains no OS include (FR-041)
+- [x] T001 Create `CMakeLists.txt`: C23, extensions off, `-Wall -Wextra -Wpedantic -Werror` (GCC/Clang), target `overdrive` + alias `overdrive::overdrive`, `C_VISIBILITY_PRESET hidden`, `OVERDRIVE_BUILDING`/`OVERDRIVE_SHARED` definitions, options `OVERDRIVE_BUILD_TESTS`, `OVERDRIVE_BUILD_EXAMPLES`, compiler-version check per baseline
+- [x] T002 Create `CMakePresets.json`: `debug`, `release`, `debug-clang`, `shared`, `windows-cross-debug` (MinGW + Wine emulator); test presets with `noTestsAction: error`
+- [x] T003 Copy the approved contract headers into `include/overdrive/` unchanged (`overdrive.h`, `core.h`, `terminal.h`, `render.h`) — contract freeze point
+- [x] T004 Create `tests/CMakeLists.txt` with `ovd_add_test(<name>)` helper (one line per test, append-only)
+- [x] T005 Write `tests/test_core.c`: result names for every enumerator and an out-of-range value; `ovd_version()` equals header macros
+- [x] T006 Implement `src/core.c`: `ovd_result_name`, `ovd_version`
+- [x] T007 Create `cmake/check_exports.cmake` and a `check_exports` CTest: fail on any exported symbol without `ovd_` (nm for ELF/Mach-O, objdump export table for PE) (FR-040)
+- [x] T008 Create `.github/workflows/ci.yml`: Linux GCC 14 debug+release, Linux Clang debug, macOS Apple Clang debug, MinGW cross + Wine; each runs the presets' configure/build/test; one `ci-ok` aggregate job
+- [x] T009 Add a header self-containment test: each public header compiles alone (`tests/test_headers.c` + generated per-header TUs in the build tree) and contains no OS include (FR-041)
 
 ## Phase 1 — Primitives (parallel lanes; each depends on OVD-01)
 
@@ -41,10 +41,10 @@ Every behavior task is preceded by its test task, which must be seen failing.
 - [ ] T019 [P] Write `tests/test_vt_replay.c`: the interpreter's own tests (CUP, SGR deltas, wide glyphs, ED 2, unknown sequence → error)
 
 ### OVD-06 Platform layer [P]
-- [ ] T020 [P] [US2] Write `src/platform/platform.h`: is-terminal, size, enter/leave (records prior modes in a struct), write-all, environment lookup — no OS types in the header
-- [ ] T021 [P] [US2] Implement `src/platform/platform_posix.c` (termios ECHO only, on stdin only if it is a terminal (R27); TIOCGWINSZ; write loop with EINTR; enter/leave order and best-effort restore per R26, R28) — verify each call against POSIX docs and cite them in the PR
-- [ ] T022 [P] [US2] Implement `src/platform/platform_windows.c` (console modes incl. `DISABLE_NEWLINE_AUTO_RETURN`, code page 65001, `GetConsoleScreenBufferInfo`, `WriteFile` loop; order, rollback, and restore per R26–R28) — verify against Microsoft docs and cite them
-- [ ] T023 [P] [US2] Implement color detection from the environment (R10) in platform-independent `src/detect.c` with `tests/test_detect.c` using an injected environment lookup; first match wins, NO_COLOR only when non-empty (R36)
+- [x] T020 [P] [US2] Write `src/platform/platform.h`: is-terminal, size, enter/leave (records prior modes in a struct), write-all, environment lookup — no OS types in the header
+- [x] T021 [P] [US2] Implement `src/platform/platform_posix.c` (termios ECHO only, on stdin only if it is a terminal (R27); TIOCGWINSZ; write loop with EINTR; enter/leave order and best-effort restore per R26, R28) — verify each call against POSIX docs and cite them in the PR
+- [x] T022 [P] [US2] Implement `src/platform/platform_windows.c` (console modes incl. `DISABLE_NEWLINE_AUTO_RETURN`, code page 65001, `GetConsoleScreenBufferInfo`, `WriteFile` loop; order, rollback, and restore per R26–R28) — verify against Microsoft docs and cite them
+- [x] T023 [P] [US2] Implement color detection from the environment (R10) in platform-independent `src/detect.c` with `tests/test_detect.c` using an injected environment lookup; first match wins, NO_COLOR only when non-empty (R36)
 
 ## Phase 2 — Canvas (depends on OVD-03, OVD-04)
 
