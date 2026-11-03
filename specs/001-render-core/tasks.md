@@ -41,10 +41,10 @@ Every behavior task is preceded by its test task, which must be seen failing.
 - [ ] T019 [P] Write `tests/test_vt_replay.c`: the interpreter's own tests (CUP, SGR deltas, wide glyphs, ED 2, unknown sequence → error)
 
 ### OVD-06 Platform layer [P]
-- [ ] T020 [P] [US2] Write `src/platform/platform.h`: is-terminal, size, enter/leave (records prior modes in a struct), write-all, environment lookup — no OS types in the header
-- [ ] T021 [P] [US2] Implement `src/platform/platform_posix.c` (termios ECHO only, on stdin only if it is a terminal (R27); TIOCGWINSZ; write loop with EINTR; enter/leave order and best-effort restore per R26, R28) — verify each call against POSIX docs and cite them in the PR
-- [ ] T022 [P] [US2] Implement `src/platform/platform_windows.c` (console modes incl. `DISABLE_NEWLINE_AUTO_RETURN`, code page 65001, `GetConsoleScreenBufferInfo`, `WriteFile` loop; order, rollback, and restore per R26–R28) — verify against Microsoft docs and cite them
-- [ ] T023 [P] [US2] Implement color detection from the environment (R10) in platform-independent `src/detect.c` with `tests/test_detect.c` using an injected environment lookup; first match wins, NO_COLOR only when non-empty (R36)
+- [x] T020 [P] [US2] Write `src/platform/platform.h`: is-terminal, size, enter/leave (records prior modes in a struct), write-all, environment lookup — no OS types in the header
+- [x] T021 [P] [US2] Implement `src/platform/platform_posix.c` (termios ECHO only, on stdin only if it is a terminal (R27); TIOCGWINSZ; write loop with EINTR; enter/leave order and best-effort restore per R26, R28) — verify each call against POSIX docs and cite them in the PR
+- [x] T022 [P] [US2] Implement `src/platform/platform_windows.c` (console modes incl. `DISABLE_NEWLINE_AUTO_RETURN`, code page 65001, `GetConsoleScreenBufferInfo`, `WriteFile` loop; order, rollback, and restore per R26–R28) — verify against Microsoft docs and cite them
+- [x] T023 [P] [US2] Implement color detection from the environment (R10) in platform-independent `src/detect.c` with `tests/test_detect.c` using an injected environment lookup; first match wins, NO_COLOR only when non-empty (R36)
 
 ## Phase 2 — Canvas (depends on OVD-03, OVD-04)
 
