@@ -93,6 +93,17 @@ add_test(NAME check_exports_rejects_generic COMMAND "${CMAKE_COMMAND}"
 
 ovd_add_test(test_core)
 ovd_add_test(test_headers)
+ovd_add_test(test_detect)
+# Internal functions are hidden in a shared build; the test compiles its modules directly.
+if(WIN32)
+    target_sources(test_detect PRIVATE "${PROJECT_SOURCE_DIR}/src/platform/platform_windows.c")
+else()
+    target_sources(test_detect PRIVATE "${PROJECT_SOURCE_DIR}/src/platform/platform_posix.c")
+endif()
+target_sources(test_detect PRIVATE "${PROJECT_SOURCE_DIR}/src/detect.c")
+# The real environment lookup is tested against variables set for this test only.
+set_tests_properties(test_detect PROPERTIES ENVIRONMENT_MODIFICATION
+    "OVD_TEST_DETECT_PROBE=set:probe-value;OVD_TEST_DETECT_UNSET=unset:;NO_COLOR=set:1")
 ovd_add_test(test_alloc)
 # Shared builds hide internal symbols, so the test compiles the modules it tests.
 target_sources(test_alloc PRIVATE support/test_alloc.c

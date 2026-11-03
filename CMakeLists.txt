@@ -113,5 +113,12 @@ if(OVERDRIVE_BUILD_EXAMPLES)
     endif()
     add_subdirectory(examples)
 endif()
+# One platform file per build (research R11) and color detection (R10).
+if(WIN32)
+    target_sources(overdrive PRIVATE src/platform/platform_windows.c)
+else()
+    target_sources(overdrive PRIVATE src/platform/platform_posix.c)
+endif()
+target_sources(overdrive PRIVATE src/detect.c)
 
 target_sources(overdrive PRIVATE src/alloc.c src/output.c)
