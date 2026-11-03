@@ -10,7 +10,7 @@ if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
 elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
     set(overdrive_compiler_minimum 17)
 elseif(CMAKE_C_COMPILER_ID STREQUAL "Clang")
-    set(overdrive_compiler_minimum 18)
+    set(overdrive_compiler_minimum 19)
 else()
     message(FATAL_ERROR "Overdrive requires GCC, Clang, or Apple Clang with C23 support.")
 endif()
@@ -113,6 +113,13 @@ if(OVERDRIVE_BUILD_EXAMPLES)
     endif()
     add_subdirectory(examples)
 endif()
+# One platform file per build (research R11) and color detection (R10).
+if(WIN32)
+    target_sources(overdrive PRIVATE src/platform/platform_windows.c)
+else()
+    target_sources(overdrive PRIVATE src/platform/platform_posix.c)
+endif()
+target_sources(overdrive PRIVATE src/detect.c)
 
 # Unicode (OVD-03): range tables generated into the build tree from the
 # vendored UCD by the build itself (Art. II, R5).

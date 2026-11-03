@@ -110,7 +110,9 @@ These summarize the constitution. They don't replace it.
   `OvdPascalCase`; constants and enumerators `OVD_UPPER_SNAKE`; build
   options `OVERDRIVE_*` (Art. XIV).
 - Internal functions are `static`, or declared in a private header under
-  `src/` without `OVD_API`. Never export a generic name.
+  `src/` without `OVD_API`. Every non-static symbol carries `ovd_`, hidden
+  or not: the export check lists the static archive, where hidden symbols
+  appear (research R12).
 - No OS header in a public header. Platform code stays in `src/platform/`.
 - Closed sets are `enum`s with a fixed underlying type (Art. III).
 - Use C23 where it carries meaning: `bool`, `nullptr`, `[[nodiscard]]`,
@@ -174,9 +176,16 @@ PR, date, or temporary state in them; use conditions and placeholders
 <why, not what — wrap at 72>
 
 Refs #<number>
+
 Assisted-by: AGENT_NAME:MODEL_VERSION [TOOL…]
 Co-Authored-By: <the tool's own co-author line, if it adds one>
 ```
+
+The trailers are the last paragraph, alone. `Refs #<number>` is not a
+trailer (no colon). git parses a mixed final paragraph as trailers only
+when one of them is git-generated or configured, which these are not, so
+the guard would see no disclosure. Check with
+`git log -1 --format=%B | git interpret-trailers --parse`.
 
 - Conventional Commits. `type` is one of `feat`, `fix`, `docs`, `build`,
   `ci`, `test`, `refactor`, `perf`, `chore`; `scope` is the module
@@ -201,6 +210,22 @@ Co-Authored-By: <the tool's own co-author line, if it adds one>
   head commit, an independent review with no unresolved defect, no
   `needs-human` label, no owner-reserved path. `.claude/hooks/guard.sh`
   checks the mechanical parts.
+- The only accepted merge is the canonical form, run alone:
+  `gh pr merge <N> [--squash|--merge|--rebase] [--delete-branch|-d] --match-head-commit <sha>`,
+  where `<sha>` is the reviewed head. The guard blocks every other
+  spelling.
+- The reviewer posts a PR comment with the findings and, each on its own
+  line, `Review-Verdict: PASS` (or `FAIL`) and `Reviewed-Head: <sha>`,
+  the full head commit reviewed. The guard accepts a merge only when a
+  PASS names the current head and no FAIL does; a new push needs a new
+  review.
+- Write gh and git commands plainly: literal arguments, flags after the
+  subcommand, one command per step. A command that names gh, git, an
+  environment dump, `.claude`, or the gh configuration may not use
+  `$'…'`, line continuations, `eval`, `sh -c`, or substitutions in a
+  gh or git argument. Long text, or text with a token variable, goes in
+  a file written with the Write tool and passed with `--body-file` or
+  `-F`.
 - Never tag, release, change visibility, settings, or secrets, force-push,
   or delete; label the issue `needs-human` instead (Art. XVI).
 

@@ -11,6 +11,8 @@ OVD_API OvdVersion ovd_version(void)
 
 OVD_API const char *ovd_result_name(OvdResult result)
 {
+    /* No default: -Wswitch then fails the build for an enumerator added
+     * without a name here. Out-of-range values fall through to the end. */
     switch (result) {
     case OVD_OK:
         return "OVD_OK";
@@ -28,7 +30,6 @@ OVD_API const char *ovd_result_name(OvdResult result)
         return "OVD_ERROR_PLATFORM";
     case OVD_ERROR_IO:
         return "OVD_ERROR_IO";
-    default:
-        return "OVD_RESULT_UNKNOWN";
     }
+    return "OVD_RESULT_UNKNOWN";
 }
