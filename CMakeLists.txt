@@ -121,6 +121,8 @@ else()
 endif()
 target_sources(overdrive PRIVATE src/detect.c)
 
+target_sources(overdrive PRIVATE src/alloc.c src/output.c)
+
 # Unicode (OVD-03): range tables generated into the build tree from the
 # vendored UCD by the build itself (Art. II, R5).
 set(overdrive_unicode_tables "${PROJECT_BINARY_DIR}/generated/unicode_tables.h")
