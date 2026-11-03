@@ -115,7 +115,10 @@ against Microsoft and POSIX documentation during the platform issue
 (`BUILD_SHARED_LIBS`); `C_VISIBILITY_PRESET hidden`; `OVD_API` on public
 declarations. A `cmake -P` check lists exported symbols (`nm` on
 ELF/Mach-O; `objdump -p` export table on PE) and fails on any without
-`ovd_` (FR-040). `nm`/`objdump` come with the declared toolchains.
+`ovd_` (FR-040). `nm`/`objdump` come with the declared toolchains. On a
+static archive the listing has every global symbol, hidden or not, so
+the rule the check enforces is: every non-static symbol in the library
+carries `ovd_` (R41).
 
 **R13 — Tests.** Plain C test executables registered with CTest, no
 framework (Art. VII). Expected screens written as text rows (Art. VI).
@@ -452,3 +455,26 @@ Each takes the narrowest reading (issue #7, labeled `assumption`).
   redirected handle (the "is a terminal" test), and `srWindow`'s corners
   are inclusive (size = difference + 1). Both are on the OVD-12 manual
   checklist.
+
+### Build records (OVD-01 review, #28)
+
+**R41 — Compiler and CI facts the build relies on.** Checked
+2026-11-02; labeled `assumption`.
+- Clang 18 lacks C23 object `constexpr`: Clang's C status page
+  (clang.llvm.org/c_status.html) lists "constexpr for object
+  definitions" (N3018) from Clang 19. Clang 18 stays the minimum, and
+  library and test code does not use object `constexpr` (baseline,
+  `AGENTS.md`). The public headers need none of it.
+  *Rejected:* raising the minimum to Clang 19, which needs a new CI
+  compiler for a feature nothing requires.
+- Export rule (R12): the check runs on the static archive too, where
+  hidden symbols are listed, so every non-static symbol carries `ovd_`.
+  The `check_exports_static_rejects_generic` test pins it with a hidden
+  generic name. *Rejected:* checking only the shared library, which lets
+  a generic hidden name collide in a consumer's static link.
+- `ovd_result_name` has no `default:`, so `-Wswitch` under `-Werror`
+  fails the build for an `OvdResult` enumerator it does not name.
+- CI does not exercise the tool minimums. The last `library-ci` run on
+  `main` used CMake 3.31.6 on `ubuntu-24.04` and, on `macos-latest`
+  (then `macos-26-arm64`), CMake 4.4.4 with Apple clang 21.0.0. The
+  minimums are checked by hand, per baseline.

@@ -23,11 +23,20 @@ supported compiler families on every supported platform.
 
 C23 features the public headers rely on — `bool` and `nullptr` as
 keywords, `[[nodiscard]]`, enums with a fixed underlying type — are the
-reason for the compiler minimums. The Clang minimums are provisional:
-they are confirmed, or raised, by building the headers under
-`-std=c23 -Wpedantic -Werror` on that version, and this table is amended
-with the result. MSVC is not supported: its C23 support
-does not cover them.
+reason for the compiler minimums. Clang 18 is confirmed: the public
+headers build under `-std=c23 -Wpedantic -Werror` on it, and CI builds
+with it. Clang 18 lacks C23 object `constexpr` (Clang 19 adds it), so
+library and test code does not use object `constexpr` while Clang 18 is
+the minimum. The Apple Clang minimum is still provisional: it is
+confirmed, or raised, by building the headers under
+`-std=c23 -Wpedantic -Werror` on that version, and this table is
+amended with the result. MSVC is not supported: its C23 support does
+not cover them.
+
+CI does not prove these minimums. It uses the CMake that the runner
+image provides, which can be newer than the minimum, and `macos-latest`
+moves with GitHub's image. Each CI job logs the tool versions it used.
+A change that relies on a minimum is checked on that version by hand.
 
 Platform packages:
 

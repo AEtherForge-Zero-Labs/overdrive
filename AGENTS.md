@@ -110,11 +110,14 @@ These summarize the constitution. They don't replace it.
   `OvdPascalCase`; constants and enumerators `OVD_UPPER_SNAKE`; build
   options `OVERDRIVE_*` (Art. XIV).
 - Internal functions are `static`, or declared in a private header under
-  `src/` without `OVD_API`. Never export a generic name.
+  `src/` without `OVD_API`. Every non-static symbol carries `ovd_`, hidden
+  or not: the export check lists the static archive, where hidden symbols
+  appear (research R12).
 - No OS header in a public header. Platform code stays in `src/platform/`.
 - Closed sets are `enum`s with a fixed underlying type (Art. III).
-- Use C23 where it carries meaning: `bool`, `nullptr`, `[[nodiscard]]`,
-  `constexpr`.
+- Use C23 where it carries meaning: `bool`, `nullptr`, `[[nodiscard]]`.
+  Object `constexpr` is not used while Clang 18 is the minimum (it arrives
+  in Clang 19; see the baseline).
 - Caller text is untrusted: no byte of it reaches the terminal as a control
   sequence. Bounded writes only; check every allocation and size
   computation (Art. XIII).
