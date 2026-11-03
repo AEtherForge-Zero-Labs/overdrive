@@ -36,11 +36,17 @@ jobs:
           fi
       - name: Show toolchain
         run: |
-          "$CC" --version
           cmake --version
           ninja --version
       - name: Configure
         run: cmake --preset "${{ matrix.preset }}"
+      # The preset may name its own compiler (debug-clang sets clang), so
+      # report the one CMake configured, not $CC.
+      - name: Show configured compiler
+        run: |
+          compiler=$(sed -n 's/^CMAKE_C_COMPILER:[A-Z]*=//p' "build/${{ matrix.preset }}/CMakeCache.txt")
+          echo "CMAKE_C_COMPILER=$compiler"
+          "$compiler" --version
       - name: Build
         run: cmake --build --preset "${{ matrix.preset }}"
       - name: Test
