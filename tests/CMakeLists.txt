@@ -137,6 +137,9 @@ ovd_add_test(test_unicode)
 target_sources(test_unicode PRIVATE "${PROJECT_SOURCE_DIR}/src/unicode.c")
 target_include_directories(test_unicode PRIVATE "${PROJECT_BINARY_DIR}/generated")
 add_dependencies(test_unicode ovd_unicode_tables)
+ovd_add_test(test_color)
+# Internal functions are hidden in a shared build; the test compiles its module directly.
+target_sources(test_color PRIVATE "${PROJECT_SOURCE_DIR}/src/color.c")
 
 # Replay interpreter and screen model: the oracle for rendering tests (SC-001).
 add_library(overdrive_vt_replay STATIC support/screen.c support/vt_replay.c)

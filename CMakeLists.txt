@@ -139,3 +139,5 @@ add_custom_command(OUTPUT "${overdrive_unicode_tables}"
 add_custom_target(ovd_unicode_tables DEPENDS "${overdrive_unicode_tables}")
 target_sources(overdrive PRIVATE src/unicode.c "${overdrive_unicode_tables}")
 target_include_directories(overdrive PRIVATE "${PROJECT_BINARY_DIR}/generated")
+
+target_sources(overdrive PRIVATE src/color.c)
