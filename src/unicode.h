@@ -9,7 +9,7 @@
 #include <stdint.h>
 
 /* The most UTF-8 bytes one cell's grapheme holds (spec Assumptions). */
-enum : uint8_t { OVD_GRAPHEME_MAX_BYTES = 15 };
+constexpr uint8_t OVD_GRAPHEME_MAX_BYTES = 15;
 
 /* One grapheme as a cell stores it.
  *
