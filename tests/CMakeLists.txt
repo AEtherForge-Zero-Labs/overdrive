@@ -148,3 +148,13 @@ target_include_directories(overdrive_vt_replay PUBLIC "${CMAKE_CURRENT_SOURCE_DI
 ovd_target_warnings(overdrive_vt_replay)
 ovd_add_test(test_vt_replay)
 target_link_libraries(test_vt_replay PRIVATE overdrive_vt_replay)
+ovd_add_test(test_canvas)
+# The grid and canvas internals are hidden in a shared build; compile them in.
+target_sources(test_canvas PRIVATE support/test_alloc.c
+    "${PROJECT_SOURCE_DIR}/src/alloc.c" "${PROJECT_SOURCE_DIR}/src/buffer.c"
+    "${PROJECT_SOURCE_DIR}/src/canvas.c" "${PROJECT_SOURCE_DIR}/src/unicode.c")
+target_include_directories(test_canvas PRIVATE "${PROJECT_BINARY_DIR}/generated")
+add_dependencies(test_canvas ovd_unicode_tables)
+# canvas.c defines OVD_API functions: compiled here it is Overdrive's own code,
+# so a Windows shared build must see them as dllexport, not dllimport.
+target_compile_definitions(test_canvas PRIVATE OVERDRIVE_BUILDING)

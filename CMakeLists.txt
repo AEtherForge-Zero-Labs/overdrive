@@ -141,3 +141,6 @@ target_sources(overdrive PRIVATE src/unicode.c "${overdrive_unicode_tables}")
 target_include_directories(overdrive PRIVATE "${PROJECT_BINARY_DIR}/generated")
 
 target_sources(overdrive PRIVATE src/color.c)
+
+# Cell grid and canvas (OVD-07).
+target_sources(overdrive PRIVATE src/buffer.c src/canvas.c)

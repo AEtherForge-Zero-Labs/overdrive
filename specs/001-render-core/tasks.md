@@ -49,9 +49,9 @@ Every behavior task is preceded by its test task, which must be seen failing.
 ## Phase 2 — Canvas (depends on OVD-03, OVD-04)
 
 ### OVD-07 Cell buffer and canvas
-- [ ] T024 [US1] Write `tests/test_canvas.c`: fill, clip set/restore, text advance, clipping, wide glyph at right edge/clip, overwriting halves of a wide glyph incl. the other half outside the clip (R20), first half outside clip or left edge (R19), cell read-back, negative and zero rects, INT32_MIN/MAX coordinates (R18), closed canvas and nullptr: drawing no-op, `ovd_canvas_text` → 0, `ovd_canvas_set_clip` stores nothing and → {0,0,0,0}, `ovd_canvas_cell` → false (R22, R23), color normalization
-- [ ] T025 [US1] Implement `src/buffer.h`/`src/buffer.c` (`OvdBuffer` grid, resize via allocator, wide-glyph pairing invariant)
-- [ ] T026 [US1] Implement `src/canvas.c` (`ovd_canvas_size`, `_clip`, `_set_clip`, `_fill`, `_text`, `_cell`)
+- [x] T024 [US1] Write `tests/test_canvas.c`: fill, clip set/restore, text advance, clipping, wide glyph at right edge/clip, overwriting halves of a wide glyph incl. the other half outside the clip (R20), first half outside clip or left edge (R19), cell read-back, negative and zero rects, INT32_MIN/MAX coordinates (R18), closed canvas and nullptr: drawing no-op, `ovd_canvas_text` → 0, `ovd_canvas_set_clip` stores nothing and → {0,0,0,0}, `ovd_canvas_cell` → false (R22, R23), color normalization
+- [x] T025 [US1] Implement `src/buffer.h`/`src/buffer.c` (`OvdBuffer` grid, resize via allocator, wide-glyph pairing invariant)
+- [x] T026 [US1] Implement `src/canvas.c` (`ovd_canvas_size`, `_clip`, `_set_clip`, `_fill`, `_text`, `_cell`)
 
 ## Phase 3 — Rendering (parallel pair)
 

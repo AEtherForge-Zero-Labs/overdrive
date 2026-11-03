@@ -603,3 +603,31 @@ Each takes the narrowest reading (issue #7, labeled `assumption`).
   change used CMake 3.31.6 on `ubuntu-24.04` and, on `macos-latest`
   (then `macos-26-arm64`), CMake 4.4.4 with Apple clang 21.0.0. Those
   minimums are checked by hand, per baseline.
+
+### Grid and canvas (OVD-07)
+
+**R42 — Grid and canvas choices.** R18–R23 and R31 leave these open.
+Each takes the narrowest reading (issue #8, labeled `assumption`).
+- The grid keeps pairing itself. Before a cell is overwritten, the other
+  half of the wide grapheme it belongs to becomes a space in its own
+  style. That one rule is R20, and it holds for any caller. A wide
+  grapheme whose second column is off the grid is refused, and nothing
+  changes. The canvas never writes outside the clip itself, so R20's
+  repair is the only write outside it.
+- The second half of a wide grapheme carries the first half's style. So
+  "its own style" means the same thing from either side.
+- Storage follows R39's pattern. `ovd_buffer_request` gives the request,
+  the terminal batches it in `ovd_alloc_all`, and `ovd_buffer_adopt`
+  releases the old block and clears the new one. A non-positive dimension
+  is `OVD_ERROR_INVALID_ARGUMENT`. A `cols × rows` that overflows `size_t`
+  is `OVD_ERROR_ALLOCATION`.
+- `struct OvdCanvas` is a frame pointer and a clip. It is open exactly
+  when the pointer is non-null, and zero-initialized means closed. It is
+  declared in `src/buffer.h`, so the terminal can embed it (R23) without
+  a separate `canvas.h`. `ovd_canvas_open` clears the frame buffer and
+  sets the clip to the whole buffer: the canvas half of
+  `ovd_frame_begin`.
+- `ovd_canvas_cell` with a nullptr `out` returns false. That is R22's
+  zero value for an infallible function.
+- Styles are normalized once, when drawn (R22), and the grid stores what
+  it is given.
