@@ -212,6 +212,7 @@ static bool test_platform_arguments(void)
     CHECK(ovd_platform_size(nullptr) == OVD_ERROR_INVALID_ARGUMENT);
     CHECK(ovd_platform_write(nullptr, 0));
     CHECK(ovd_platform_write("", 0));
+    CHECK(!ovd_platform_write(nullptr, 1));
     return true;
 }
 

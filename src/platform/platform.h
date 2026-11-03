@@ -75,7 +75,8 @@ void ovd_platform_leave(OvdPlatformModes *modes);
  * (and, on POSIX, after EINTR), with nothing else in between. Returns
  * true when every byte was accepted. Returns false if a write fails or
  * accepts nothing; an unknown prefix of the bytes may have been written.
- * length 0 returns true without writing; bytes may then be nullptr. */
+ * length 0 returns true without writing; bytes may then be nullptr.
+ * nullptr bytes with a non-zero length returns false without writing. */
 [[nodiscard]] bool ovd_platform_write(const char *bytes, size_t length);
 
 /* Returns the value of the environment variable `name`, or nullptr if it
