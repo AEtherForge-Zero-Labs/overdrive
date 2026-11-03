@@ -70,11 +70,15 @@ OvdResult ovd_alloc_all(const OvdAllocator *allocator, const OvdBlockRequest *re
     if (count == 0) {
         return OVD_OK;
     }
-    if (!ovd_alloc_is_valid(allocator) || requests == nullptr || out == nullptr) {
+    if (out == nullptr) {
         return OVD_ERROR_INVALID_ARGUMENT;
     }
+    /* Emptied before any other check, so every failure leaves out empty. */
     for (size_t i = 0; i < count; ++i) {
         out[i] = (OvdBlock){};
+    }
+    if (!ovd_alloc_is_valid(allocator) || requests == nullptr) {
+        return OVD_ERROR_INVALID_ARGUMENT;
     }
     /* Every size first, so a bad request makes no allocator call. */
     for (size_t i = 0; i < count; ++i) {

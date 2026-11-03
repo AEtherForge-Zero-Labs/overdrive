@@ -27,6 +27,25 @@ static bool block_is_empty(OvdBlock block)
     return block.data == nullptr && block.size == 0;
 }
 
+/* Fills blocks with a non-empty sentinel that is never dereferenced or
+ * released, so a check for emptiness proves the callee wrote the slot. */
+static void seed(OvdBlock *blocks, size_t count, OvdBlock sentinel)
+{
+    for (size_t i = 0; i < count; ++i) {
+        blocks[i] = sentinel;
+    }
+}
+
+static bool all_empty(const OvdBlock *blocks, size_t count)
+{
+    for (size_t i = 0; i < count; ++i) {
+        if (!block_is_empty(blocks[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool test_validation(void)
 {
     const OvdAllocator fallback = ovd_alloc_default();
@@ -133,27 +152,45 @@ static bool test_batch(void)
     }
     CHECK(state.live_blocks == 0);
 
-    /* An overflow or zero anywhere fails before the first allocator call. */
+    /* An overflow or zero anywhere fails before the first allocator call.
+     * Every failure leaves out[0 .. count) empty, argument errors included
+     * (alloc.h), and writes nothing past count. */
     test_alloc_init(&state);
+    const OvdBlock sentinel = { .data = &state, .size = 7 };
     const OvdBlockRequest overflow_last[] = {
         { .count = 4, .element_size = 8 },
         { .count = SIZE_MAX, .element_size = SIZE_MAX },
     };
+    seed(out, 3, sentinel);
     CHECK(ovd_alloc_all(&allocator, overflow_last, 2, out) == OVD_ERROR_ALLOCATION);
-    CHECK(block_is_empty(out[0]) && block_is_empty(out[1]));
+    CHECK(all_empty(out, 2));
     const OvdBlockRequest zero_middle[] = {
         { .count = 4, .element_size = 8 },
         { .count = 0, .element_size = 8 },
         { .count = 1, .element_size = 1 },
     };
+    seed(out, 3, sentinel);
     CHECK(ovd_alloc_all(&allocator, zero_middle, 3, out) == OVD_ERROR_INVALID_ARGUMENT);
-    CHECK(ovd_alloc_all(&allocator, nullptr, 1, out) == OVD_ERROR_INVALID_ARGUMENT);
+    CHECK(all_empty(out, 3));
+    seed(out, 3, sentinel);
+    CHECK(ovd_alloc_all(&allocator, nullptr, 2, out) == OVD_ERROR_INVALID_ARGUMENT);
+    CHECK(all_empty(out, 2));
+    CHECK(out[2].data == sentinel.data && out[2].size == sentinel.size);
+    OvdAllocator missing = allocator;
+    missing.allocate = nullptr;
+    seed(out, 3, sentinel);
+    CHECK(ovd_alloc_all(&missing, requests, 3, out) == OVD_ERROR_INVALID_ARGUMENT);
+    CHECK(all_empty(out, 3));
+    seed(out, 3, sentinel);
+    CHECK(ovd_alloc_all(nullptr, requests, 3, out) == OVD_ERROR_INVALID_ARGUMENT);
+    CHECK(all_empty(out, 3));
     CHECK(ovd_alloc_all(&allocator, requests, 1, nullptr) == OVD_ERROR_INVALID_ARGUMENT);
     CHECK(state.allocate_calls == 0);
 
     /* A refusal releases what was taken, in reverse, and empties out. */
     test_alloc_init(&state);
     state.refuse_call = 3;
+    seed(out, 3, sentinel);
     CHECK(ovd_alloc_all(&allocator, requests, 3, out) == OVD_ERROR_ALLOCATION);
     CHECK(state.event_count == 5);
     CHECK(event_is(&state, 0, TEST_ALLOC_EVENT_ALLOCATE, 32));

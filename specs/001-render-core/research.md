@@ -372,8 +372,8 @@ buffer never grows.
 - A zero element count or element size is `OVD_ERROR_INVALID_ARGUMENT`
   with no allocator call (a caller bug; `allocate` never sees 0).
 - A batch checks every request's size before its first allocator call;
-  on a refusal it releases what it took in reverse order and leaves every
-  output block empty.
+  on a refusal it releases what it took in reverse order. On any
+  failure, argument errors included, every output block is empty.
 - R31's allocate-then-release is a batch allocation of all new blocks,
   then each owner adopting its new block and releasing its old one. No
   callback interface (Art. VII).

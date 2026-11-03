@@ -29,10 +29,15 @@ encodings it emits), the terminal's resize sequence, growth of any kind.
   element size is `OVD_ERROR_INVALID_ARGUMENT` with no allocator call: it
   is a caller bug, and `allocate` must never see size 0.
 - `ovd_alloc_all` checks every size before the first allocator call, then
-  allocates in order; on a refusal it releases what it took, in reverse,
-  and leaves every output block empty. The caller then hands each new
-  block to its owner, which releases the old one. That is R31's
-  allocate-then-release without a function-pointer interface.
+  allocates in order; on a refusal it releases what it took, in reverse.
+  It empties every output block before any other check, so every
+  failure, argument errors included, leaves them empty. The caller then
+  hands each new block to its owner, which releases the old one. That is
+  R31's allocate-then-release without a function-pointer interface.
+  (Review found that argument errors returned before the emptying; fixed
+  with tests that seed non-empty slots. The narrower alternative, which
+  promises emptiness only after the arguments are checked, was rejected:
+  it would let callers see stale slots.)
 - `OvdOutput` never allocates. It adopts a block (releasing any previous
   one), which fixes its capacity until the next adoption. The struct is
   declared in the private header so the terminal can embed it without a
