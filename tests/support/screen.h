@@ -42,9 +42,9 @@ typedef enum TestWidth : uint8_t {
  * an extender that also joins the next code point, whatever this returns. */
 typedef TestWidth (*TestClassify)(uint32_t code_point);
 
-enum : uint32_t { TEST_ZWJ = 0x200D };
+constexpr uint32_t TEST_ZWJ = 0x200D;
 
-enum : size_t { TEST_GRAPHEME_MAX = 15 };
+constexpr size_t TEST_GRAPHEME_MAX = 15;
 
 typedef struct TestCell {
     char text[TEST_GRAPHEME_MAX + 1]; /* NUL-terminated */

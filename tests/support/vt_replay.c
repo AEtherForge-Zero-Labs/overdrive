@@ -6,13 +6,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum : size_t {
-    ERROR_CAPACITY = 320,
-    SHOWN_BYTES = 48,    /* offending bytes quoted in an error */
-    MAX_PARAMS = 32,     /* SGR with every attribute and two RGB colors needs 17 */
-};
-
-static const unsigned char escape = 0x1B;
+constexpr size_t ERROR_CAPACITY = 320;
+constexpr size_t SHOWN_BYTES = 48;  /* offending bytes quoted in an error */
+constexpr size_t MAX_PARAMS = 32;   /* SGR with every attribute and two RGB colors needs 17 */
+constexpr unsigned char ESCAPE = 0x1B;
 
 struct VtReplay {
     TestScreen *screen;
@@ -442,7 +439,7 @@ bool vt_replay_feed(VtReplay *vt, const void *bytes, size_t length)
     while (i < length) {
         size_t next = i + 1;
         bool ok = false;
-        if (feed.bytes[i] == escape) {
+        if (feed.bytes[i] == ESCAPE) {
             /* The sequence ends a grapheme that ends in ZWJ, like any other;
              * the next glyph then needs a CUP first (R38). */
             if (feed.join_next) {
