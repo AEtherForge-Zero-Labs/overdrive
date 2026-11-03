@@ -631,3 +631,41 @@ Each takes the narrowest reading (issue #8, labeled `assumption`).
   zero value for an infallible function.
 - Styles are normalized once, when drawn (R22), and the grid stores what
   it is given.
+
+### Differential renderer (OVD-08)
+
+**R43 — Diff choices.** R8, R30, R33, and R34 leave these open. Each
+takes the narrowest reading (issue #9, labeled `assumption`).
+- `ovd_diff_render(screen, frame, depth, synchronized, output)` is
+  transformational. `screen` nullptr means the screen is unknown, and
+  the output is a full redraw (FR-025). The terminal (OVD-10) holds both
+  grids and swaps them. It also marks the screen unknown after a failed
+  write.
+- The cursor is not carried across frames. It is unknown at the start
+  of every output, so each output's first glyph follows a CUP. That costs
+  at most one CUP a frame, which is within SC-003. It is unknown again
+  after a cell whose text ends in ZWJ (R38). After a glyph in the last
+  column, the tracked column is `cols`, which matches no cell, so the
+  next glyph always gets a CUP (R33).
+- The terminal's SGR state is default at the start of every output.
+  Every non-empty output ends with `CSI 0 m`, and a full redraw starts
+  with it. A failed write makes the screen unknown, so the next output
+  starts with `CSI 0 m` anyway.
+- Cells are compared field by field: length, the text up to length,
+  width, and each style field. They are compared as stored, not after
+  downsampling. A change the depth cannot show still rewrites the cell,
+  which costs bytes but is never wrong. Only leads are compared: a
+  continuation equals the screen's whenever its lead does. Width is
+  compared, so splitting a wide glyph on screen rewrites both halves.
+- Each run of changed cells pays one CUP. Unchanged cells in a gap are
+  never re-sent instead.
+- A full redraw of a blank frame still writes its prefix and reset. An
+  unknown screen must be cleared even when nothing is drawn.
+- The R30 bound is computed by `ovd_diff_bound` and uses the size's own
+  digit counts for the CUP length. An overflow is `OVD_ERROR_ALLOCATION`,
+  as in `ovd_buffer_request`. If an append does not fit (a bug), the
+  output is emptied and the result is `OVD_ERROR_IO`.
+- An out-of-range depth is `OVD_ERROR_INVALID_ARGUMENT` (R22). It is not
+  passed through, as `ovd_color_downsample` does.
+- The diff sends cell text as stored. Keeping control bytes out of the
+  grid is the canvas's job (R17, FR-032).

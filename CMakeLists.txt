@@ -144,3 +144,6 @@ target_sources(overdrive PRIVATE src/color.c)
 
 # Cell grid and canvas (OVD-07).
 target_sources(overdrive PRIVATE src/buffer.c src/canvas.c)
+
+# Differential renderer (OVD-08).
+target_sources(overdrive PRIVATE src/diff.c)

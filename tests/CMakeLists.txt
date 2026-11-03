@@ -158,3 +158,10 @@ add_dependencies(test_canvas ovd_unicode_tables)
 # canvas.c defines OVD_API functions: compiled here it is Overdrive's own code,
 # so a Windows shared build must see them as dllexport, not dllimport.
 target_compile_definitions(test_canvas PRIVATE OVERDRIVE_BUILDING)
+ovd_add_test(test_diff)
+# The diff and the modules it reads are hidden in a shared build; compile them in.
+target_sources(test_diff PRIVATE support/test_alloc.c
+    "${PROJECT_SOURCE_DIR}/src/alloc.c" "${PROJECT_SOURCE_DIR}/src/buffer.c"
+    "${PROJECT_SOURCE_DIR}/src/output.c" "${PROJECT_SOURCE_DIR}/src/color.c"
+    "${PROJECT_SOURCE_DIR}/src/diff.c")
+target_link_libraries(test_diff PRIVATE overdrive_vt_replay)
