@@ -140,3 +140,11 @@ add_dependencies(test_unicode ovd_unicode_tables)
 ovd_add_test(test_color)
 # Internal functions are hidden in a shared build; the test compiles its module directly.
 target_sources(test_color PRIVATE "${PROJECT_SOURCE_DIR}/src/color.c")
+
+# Replay interpreter and screen model: the oracle for rendering tests (SC-001).
+add_library(overdrive_vt_replay STATIC support/screen.c support/vt_replay.c)
+target_link_libraries(overdrive_vt_replay PUBLIC $<COMPILE_ONLY:overdrive::overdrive>)
+target_include_directories(overdrive_vt_replay PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/support")
+ovd_target_warnings(overdrive_vt_replay)
+ovd_add_test(test_vt_replay)
+target_link_libraries(test_vt_replay PRIVATE overdrive_vt_replay)
