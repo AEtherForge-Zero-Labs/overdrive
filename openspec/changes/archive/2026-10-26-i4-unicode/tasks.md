@@ -13,3 +13,8 @@
 - [x] 3.1 Run the debug, debug-clang, and shared presets with zero warnings.
 - [x] 3.2 Record the version pin in research.md; tick T012–T015.
 - [x] 3.3 Publish the PR with red-then-green evidence.
+
+## 4. Review follow-ups
+
+- [x] 4.1 `src/unicode.h`: `OVD_GRAPHEME_MAX_BYTES` becomes `constexpr uint8_t` (Art. III), now that the Clang minimum is 19 (#37).
+- [x] 4.2 `tests/test_unicode.c`: grapheme dumps are capped at `sizeof bytes`, so a regressed length cannot read past the object (review note). A scratch mutant that set every length to 200 printed 15 bytes per dump.

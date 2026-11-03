@@ -28,6 +28,17 @@ static void dump(const char *bytes, size_t length)
     }
 }
 
+/* Dumps a grapheme's bytes, capped at its array, so a regressed length
+ * cannot make a failing check's diagnostic read past the object. */
+static void dump_grapheme(const OvdGrapheme *grapheme)
+{
+    size_t length = grapheme->length;
+    if (length > sizeof grapheme->bytes) {
+        length = sizeof grapheme->bytes;
+    }
+    dump(grapheme->bytes, length);
+}
+
 /* Segments input[0..length) and compares every grapheme with expected. */
 static void check_case(int line, const char *input, size_t length,
                        const Expected *expected, size_t count)
@@ -39,7 +50,7 @@ static void check_case(int line, const char *input, size_t length,
     while (ovd_unicode_next_grapheme(input, length, &offset, &grapheme)) {
         if (index >= count) {
             fprintf(stderr, "%s:%d: extra grapheme %zu: ", __FILE__, line, index);
-            dump(grapheme.bytes, grapheme.length);
+            dump_grapheme(&grapheme);
             fputc('\n', stderr);
             ++failures;
             return;
@@ -52,7 +63,7 @@ static void check_case(int line, const char *input, size_t length,
                 || grapheme.replaced != want->replaced
                 || offset - start != want->consumed) {
             fprintf(stderr, "%s:%d: grapheme %zu: got [", __FILE__, line, index);
-            dump(grapheme.bytes, grapheme.length);
+            dump_grapheme(&grapheme);
             fprintf(stderr, "] width %u replaced %d consumed %zu; want [",
                     (unsigned)grapheme.width, (int)grapheme.replaced, offset - start);
             dump(want->text, want_length);
