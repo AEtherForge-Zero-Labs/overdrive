@@ -121,10 +121,10 @@ OVD_API OvdTerminalConfig ovd_terminal_config_default(void);
  * or an allocator with a nullptr function; OVD_ERROR_ALLOCATION, including
  * when the size makes a buffer size overflow; OVD_ERROR_PLATFORM,
  * including a system terminal whose size reads as 0; or OVD_ERROR_IO if
- * the enter sequence could not be written, in which case the exit
- * sequence is written best-effort first. On failure every completed step
- * is undone in reverse order, nothing remains changed, and *out is
- * untouched. */
+ * the enter sequence could not be written, in which case destroy's exit
+ * sequence is written best-effort first, leaving the alternate screen
+ * whenever it was requested. On failure every completed step is undone
+ * in reverse order, nothing remains changed, and *out is untouched. */
 [[nodiscard]] OVD_API OvdResult ovd_terminal_create(const OvdTerminalConfig *config,
                                                     OvdTerminal **out);
 
@@ -132,7 +132,8 @@ OVD_API OvdTerminalConfig ovd_terminal_config_default(void);
  * terminal. For the system backend it writes, in one write, SGR reset,
  * autowrap on, cursor visible, and then leave the alternate screen if it
  * was entered, or else move the cursor to column 0 of the last frame's
- * last row; then restores input echo, the code page, and the output mode
+ * last row (of the size read at create if no frame has ended); then
+ * restores input echo, the code page, and the output mode
  * to the values read at create, in that order. Every step is attempted even
  * if an earlier one fails. Cursor visibility and autowrap are set to their
  * defaults, not to earlier values: they cannot be read back without input.
