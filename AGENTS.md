@@ -115,9 +115,8 @@ These summarize the constitution. They don't replace it.
   appear (research R12).
 - No OS header in a public header. Platform code stays in `src/platform/`.
 - Closed sets are `enum`s with a fixed underlying type (Art. III).
-- Use C23 where it carries meaning: `bool`, `nullptr`, `[[nodiscard]]`.
-  Object `constexpr` is not used while Clang 18 is the minimum (it arrives
-  in Clang 19; see the baseline).
+- Use C23 where it carries meaning: `bool`, `nullptr`, `[[nodiscard]]`,
+  `constexpr`.
 - Caller text is untrusted: no byte of it reaches the terminal as a control
   sequence. Bounded writes only; check every allocation and size
   computation (Art. XIII).

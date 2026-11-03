@@ -15,7 +15,7 @@ supported compiler families on every supported platform.
 | Tool | Minimum | Check |
 |---|---|---|
 | GCC | 14 | `gcc-14 --version` |
-| Clang (LLVM) | 18 | `clang --version` |
+| Clang (LLVM) | 19 | `clang --version` |
 | Apple Clang | 17 | `cc --version` |
 | CMake | 3.28 | `cmake --version` |
 | Ninja | 1.11 | `ninja --version` |
@@ -23,24 +23,25 @@ supported compiler families on every supported platform.
 
 C23 features the public headers rely on — `bool` and `nullptr` as
 keywords, `[[nodiscard]]`, enums with a fixed underlying type — are the
-reason for the compiler minimums. Clang 18 is confirmed: the public
-headers build under `-std=c23 -Wpedantic -Werror` on it, and CI builds
-with it. Clang 18 lacks C23 object `constexpr` (Clang 19 adds it), so
-library and test code does not use object `constexpr` while Clang 18 is
-the minimum. The Apple Clang minimum is still provisional: it is
-confirmed, or raised, by building the headers under
-`-std=c23 -Wpedantic -Werror` on that version, and this table is
-amended with the result. MSVC is not supported: its C23 support does
-not cover them.
+reason for the compiler minimums, together with object `constexpr`,
+which Article III asks for in named constants. Clang 19 is the first
+Clang with object `constexpr` (Clang's C status page, N3018), so it is
+the Clang minimum; Clang 18 builds the headers but not that. The Apple
+Clang minimum is provisional: it is confirmed, or raised, by building
+the headers and an object `constexpr` under `-std=c23 -Wpedantic
+-Werror` on that version, and this table is amended with the result.
+MSVC is not supported: its C23 support does not cover them.
 
-CI does not prove these minimums. It uses the CMake that the runner
-image provides, which can be newer than the minimum, and `macos-latest`
-moves with GitHub's image. Each CI job logs the tool versions it used.
-A change that relies on a minimum is checked on that version by hand.
+CI builds with the GCC and Clang minimums. It does not prove the CMake
+or Apple Clang minimums: it uses the CMake that the runner image
+provides, which can be newer than the minimum, and `macos-latest` moves
+with GitHub's image. Each CI job logs the tool versions it used. A
+change that relies on one of those minimums is checked on that version
+by hand.
 
 Platform packages:
 
-- **Ubuntu 24.04:** `sudo apt install -y gcc-14 clang-18 cmake ninja-build git`
+- **Ubuntu 24.04:** `sudo apt install -y gcc-14 clang-19 cmake ninja-build git`
 - **macOS (Homebrew):** Xcode Command Line Tools, then
   `brew install gcc@14 cmake ninja`
 - **Windows, native:** MSYS2 UCRT64 —

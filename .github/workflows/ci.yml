@@ -19,7 +19,7 @@ jobs:
           - { os: ubuntu-24.04, compiler: gcc-14, preset: debug }
           - { os: ubuntu-24.04, compiler: gcc-14, preset: release }
           - { os: ubuntu-24.04, compiler: gcc-14, preset: shared }
-          - { os: ubuntu-24.04, compiler: clang-18, preset: debug-clang }
+          - { os: ubuntu-24.04, compiler: clang-19, preset: debug-clang }
           - { os: macos-latest, compiler: cc, preset: debug }
           - { os: macos-latest, compiler: cc, preset: shared }
     env:
@@ -30,9 +30,9 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-14 clang-18 cmake ninja-build
-          if [ "$CC" = clang-18 ]; then
-            echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"
+          sudo apt-get install -y gcc-14 clang-19 cmake ninja-build
+          if [ "$CC" = clang-19 ]; then
+            echo /usr/lib/llvm-19/bin >> "$GITHUB_PATH"
           fi
       - name: Show toolchain
         run: |

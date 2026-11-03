@@ -2,19 +2,20 @@
 
 The post-merge independent review of OVD-01 (#27) passed the code but
 found gaps in the records, two missing tests, and two CI nits (issue
-#28). Some records disagree with the code: `AGENTS.md` tells agents to
-use `constexpr`, which Clang 18 rejects for objects, and the stated
-export rule is looser than the check that runs.
+#28). Some records disagree with the code. Constitution Art. III and
+`AGENTS.md` ask for `constexpr`, which the baseline's Clang 18 rejects
+for objects. The stated export rule is looser than the check that runs.
 
 ## What Changes
 
 - Records:
   - `specs/001-render-core/research.md` records that Clang 18 lacks C23
-    object `constexpr` (new R41) and that the export check rejects every
-    non-static non-`ovd_` symbol in the static archive (R12).
-  - `.specify/memory/baseline.md` amends the provisional Clang minimum.
-  - `AGENTS.md` "C rules" narrows the `constexpr` line and states the
-    export rule.
+    object `constexpr`, so the Clang minimum becomes 19 (new R41). It
+    also records that the export check rejects every non-static
+    non-`ovd_` symbol in the static archive (R12).
+  - `.specify/memory/baseline.md` raises the Clang minimum to 19.
+  - `AGENTS.md` "C rules" states the export rule; its `constexpr` line
+    stays, now true on every supported compiler.
   - `openspec/changes/i2-build-core/` is archived, and T001–T009 in
     `specs/001-render-core/tasks.md` are ticked.
 - Tests:
@@ -24,6 +25,7 @@ export rule is looser than the check that runs.
   - `tests/CMakeLists.txt` adds a static-archive negative fixture for
     the export check.
 - CI:
+  - The Clang job moves from `clang-18` to `clang-19`, the new minimum.
   - `baseline.md` notes that CI uses the runner image's CMake and a
     floating `macos-latest`.
   - The native job prints the compiler CMake actually configured, not
