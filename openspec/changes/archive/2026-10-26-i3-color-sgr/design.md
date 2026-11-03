@@ -34,8 +34,9 @@ downsampling that matches R9 and is deterministic on ties.
   16 use xterm's default 16-color values; ties go to the lowest index.
 - An out-of-range depth is treated as NONE (the public API validates
   depth, so this only guards internal misuse).
-- `OVD_COLOR_SGR_MAX_LENGTH` (48) is a macro, not a `constexpr` object,
-  because the baseline's Clang 18 lacks C23 object `constexpr`.
+- `OVD_COLOR_SGR_MAX_LENGTH` (48) is a `constexpr size_t` (Art. III). It
+  was first a macro, because the baseline's Clang 18 lacked C23 object
+  `constexpr`; #37 raised the minimum to 19.
 - Every non-static name is `ovd_color_…`: the export check also runs on
   the static archive and rejects any global symbol without `ovd_`.
 - Encode into a local buffer, then copy only when it fits: a refused

@@ -12,3 +12,7 @@
 
 - [x] 3.1 Run the debug, debug-clang, and shared presets with zero warnings.
 - [x] 3.2 Reread the full diff; publish the PR with evidence.
+
+## 4. Review follow-ups
+
+- [x] 4.1 `src/color.h`: `OVD_COLOR_SGR_MAX_LENGTH` becomes `constexpr size_t` (Art. III), now that the Clang minimum is 19 (#37); the design note says so.

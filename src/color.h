@@ -15,9 +15,8 @@
  * reach it: a delta adding all six attributes and two RGB colors
  * (ESC [ 1;2;3;4;7;9;38;2;255;255;255;48;2;255;255;255 m), and a reset
  * with five attributes and two RGB colors (a reset means one attribute
- * was removed, so at most five remain). A macro rather than a constexpr
- * object because the baseline's Clang 18 lacks C23 object constexpr. */
-#define OVD_COLOR_SGR_MAX_LENGTH ((size_t)48)
+ * was removed, so at most five remain). */
+constexpr size_t OVD_COLOR_SGR_MAX_LENGTH = 48;
 
 /* Returns color as depth can show it, with only its kind's fields set
  * (R9, R37):
