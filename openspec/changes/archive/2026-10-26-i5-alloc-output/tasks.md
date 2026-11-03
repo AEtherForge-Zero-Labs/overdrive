@@ -18,3 +18,4 @@
 
 - [x] 4.1 `ovd_alloc_all` empties `out` before its argument checks, as `src/alloc.h` promises (found in review). `tests/test_alloc.c` seeds non-empty slots on every batch failure and checks that a slot past `count` is untouched; watched it fail first.
 - [x] 4.2 Record the fix in R39.
+- [x] 4.3 `tests/support/test_alloc.h`: `TEST_ALLOC_MAX_BLOCKS` and `TEST_ALLOC_MAX_EVENTS` become `constexpr` (Art. III), now that the Clang minimum is 19 (#37); the comment that cited Clang 18 goes.

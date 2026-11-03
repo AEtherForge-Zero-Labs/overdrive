@@ -15,12 +15,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* An enum, not constexpr objects: Clang 18 (the baseline minimum) lacks
- * C23 object constexpr. */
-enum : size_t {
-    TEST_ALLOC_MAX_BLOCKS = 64,
-    TEST_ALLOC_MAX_EVENTS = 64,
-};
+constexpr size_t TEST_ALLOC_MAX_BLOCKS = 64;
+constexpr size_t TEST_ALLOC_MAX_EVENTS = 64;
 
 typedef enum TestAllocEventKind : uint8_t {
     TEST_ALLOC_EVENT_ALLOCATE,
