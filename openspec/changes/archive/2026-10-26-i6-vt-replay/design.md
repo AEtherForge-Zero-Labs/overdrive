@@ -28,12 +28,18 @@ All recorded as R38 in `research.md`:
   can scroll.
 - **The cursor starts unknown**, and is unknown again after either
   `?1049` sequence; printing before a CUP fails.
-- **Every escape sequence ends a grapheme**, so a grapheme ending in ZWJ
-  cannot pass the oracle (OVD-08 must handle it).
+- **Every escape sequence ends a grapheme**, and so does the end of a
+  write. A grapheme ending in ZWJ (legal under R15) passes; the next
+  glyph after it must follow a CUP (strict side, ASSUMED to break a
+  terminal's join). *Superseded:* the first version rejected such a cell
+  before a sequence or at the end of a write, which no frame holding
+  R15's legal cell could pass (review of 8be01e1).
 - **SGR semantics** per ECMA-48 §8.3.117 and xterm (ASSUMED, as
   recalled); bold and faint are kept as independent bits.
-- **Exact encodings:** CUP takes two explicit in-range parameters with no
-  leading zeros; reset is `CSI 0 m`; ED takes only 2 and requires the
+- **Exact encodings:** parameters are decimals with no leading zeros,
+  parsed with `ckd_mul`/`ckd_add` into `uint32_t` and no digit limit (the
+  first version's five-digit cap rejected in-range CUPs); CUP takes two
+  explicit in-range parameters; reset is `CSI 0 m`; ED takes only 2 and requires the
   default SGR state (the erase color is terminal-dependent); a private
   mode takes one parameter; no colon sub-parameters, no attribute-off
   codes.

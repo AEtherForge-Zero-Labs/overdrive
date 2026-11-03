@@ -237,9 +237,8 @@ static bool place_row(TestScreen *screen, int32_t y, const char *row, TestClassi
         }
         i += size;
     }
-    if (join_next) {
-        return fail(error, capacity, "ZWJ at the end joins nothing", y, lead);
-    }
+    /* A ZWJ at the end of the row ends its grapheme, as at the end of a
+     * text call (R15). */
     return true;
 }
 

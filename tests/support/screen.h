@@ -13,7 +13,11 @@
  *
  * Expected screens are written as text rows plus optional style-key rows
  * (one ASCII key per column; '.' is OVD_STYLE_DEFAULT, every other key is
- * looked up in a legend), so a failing comparison reads as text.
+ * looked up in a legend), so a failing comparison reads as text. Each text
+ * row is segmented like one canvas text call (R15): a ZWJ joins the code
+ * point after it, and a ZWJ at the end of the row ends its grapheme. So a
+ * cell ending in ZWJ can be written only as its row's last grapheme; build
+ * other layouts with test_screen_put and test_screen_extend.
  *
  * Glyph widths come from the caller's classifier, not from src/unicode:
  * the oracle must not share the module it checks, and this keeps the

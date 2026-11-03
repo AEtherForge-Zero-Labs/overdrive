@@ -1,6 +1,7 @@
 /* Test-only replay interpreter; see vt_replay.h and research R7, R33, R34, R38. */
 #include "vt_replay.h"
 
+#include <stdckdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,7 +10,6 @@ enum : size_t {
     ERROR_CAPACITY = 320,
     SHOWN_BYTES = 48,    /* offending bytes quoted in an error */
     MAX_PARAMS = 32,     /* SGR with every attribute and two RGB colors needs 17 */
-    MAX_DIGITS = 5,
 };
 
 static const unsigned char escape = 0x1B;
@@ -19,6 +19,7 @@ struct VtReplay {
     TestClassify classify;
     VtReplayState state;
     size_t consumed; /* bytes in earlier feeds, for error offsets */
+    bool after_zwj;  /* a grapheme ending in ZWJ was printed and no CUP has followed */
     bool failed;
     char error[ERROR_CAPACITY];
 };
@@ -55,6 +56,7 @@ VtReplay *vt_replay_create(int32_t cols, int32_t rows, TestClassify classify)
         .style = OVD_STYLE_DEFAULT,
     };
     vt->consumed = 0;
+    vt->after_zwj = false;
     vt->failed = false;
     vt->error[0] = '\0';
     return vt;
@@ -122,6 +124,10 @@ static bool print_glyph(VtReplay *vt, Feed *feed, size_t at, size_t size, uint8_
         return reject(vt, feed, at, at + size,
                       "glyph printed in the pending-wrap state (R33)");
     }
+    if (vt->after_zwj) {
+        return reject(vt, feed, at, at + size,
+                      "glyph after a grapheme ending in ZWJ, with no CUP between them (R38)");
+    }
     if (width == 2 && state->x == cols - 1) {
         return reject(vt, feed, at, at + size,
                       "wide glyph starts in the last column and would wrap (R33)");
@@ -176,8 +182,10 @@ static bool text(VtReplay *vt, Feed *feed, size_t at, size_t *next)
     return true;
 }
 
-/* Parses "p;p;...;p" (each a decimal without leading zeros, at most five
- * digits). An empty string is zero parameters. */
+/* Parses "p;p;...;p", each a decimal without leading zeros that fits in
+ * uint32_t: a longer value is rejected, never wrapped into range. There is
+ * no digit limit, so every int32_t coordinate parses. An empty string is
+ * zero parameters. */
 static bool parse_params(const unsigned char *bytes, size_t length,
                          uint32_t params[MAX_PARAMS], size_t *count)
 {
@@ -190,10 +198,10 @@ static bool parse_params(const unsigned char *bytes, size_t length,
         size_t digits = 0;
         uint32_t value = 0;
         while (i < length && bytes[i] >= '0' && bytes[i] <= '9') {
-            if (digits == MAX_DIGITS || (digits == 1 && value == 0)) {
+            if ((digits == 1 && value == 0) || ckd_mul(&value, value, 10u)
+                    || ckd_add(&value, value, (uint32_t)(bytes[i] - '0'))) {
                 return false;
             }
-            value = value * 10 + (uint32_t)(bytes[i] - '0');
             ++digits;
             ++i;
         }
@@ -393,6 +401,7 @@ static bool sequence(VtReplay *vt, Feed *feed, size_t at, size_t *next)
         state->y = (int32_t)values[0] - 1;
         state->x = (int32_t)values[1] - 1;
         state->pending_wrap = false;
+        vt->after_zwj = false;
         return true;
     case 'J':
         if (count != 1 || values[0] != 2) {
@@ -434,8 +443,11 @@ bool vt_replay_feed(VtReplay *vt, const void *bytes, size_t length)
         size_t next = i + 1;
         bool ok = false;
         if (feed.bytes[i] == escape) {
+            /* The sequence ends a grapheme that ends in ZWJ, like any other;
+             * the next glyph then needs a CUP first (R38). */
             if (feed.join_next) {
-                return reject(vt, &feed, i, i + 1, "ZWJ joins nothing (followed by a sequence)");
+                feed.join_next = false;
+                vt->after_zwj = true;
             }
             ok = sequence(vt, &feed, i, &next);
         } else {
@@ -447,7 +459,7 @@ bool vt_replay_feed(VtReplay *vt, const void *bytes, size_t length)
         i = next;
     }
     if (feed.join_next) {
-        return reject(vt, &feed, length, length, "ZWJ at the end of a write joins nothing");
+        vt->after_zwj = true; /* the end of the write ends the grapheme */
     }
     vt->consumed += length;
     return true;

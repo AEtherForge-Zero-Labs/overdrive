@@ -20,8 +20,12 @@
  * as does a wide glyph that starts in the last column. No C0 control is
  * accepted, so nothing can scroll. The cursor is unknown until the first
  * CUP and again after either ?1049 sequence, and printing while it is
- * unknown fails. Every escape sequence ends the grapheme before it, so an
- * extender must follow its base directly.
+ * unknown fails. Every escape sequence ends the grapheme before it, and so
+ * does the end of a write, so an extender must follow its base directly. A
+ * grapheme may end in ZWJ (R15). The next glyph after one must follow a CUP,
+ * because whether a terminal joins the two is terminal-dependent (R38).
+ * Parameters are decimals without leading zeros and have no digit limit;
+ * a value past UINT32_MAX is rejected, never wrapped into range.
  *
  * Each vt_replay_feed call is one write: an escape sequence, a code
  * point, or a grapheme may not continue into the next call. The first

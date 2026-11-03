@@ -158,6 +158,36 @@ static bool test_cup_validation(void)
     const VtReplayState state = vt_replay_state(vt);
     CHECK(state.x == 9 && state.y == 4);
     vt_replay_destroy(vt);
+
+    /* Parameters have no digit limit: six-digit coordinates on both axes. */
+    VtReplay *wide = vt_replay_create(100001, 1, classify);
+    CHECK(wide != nullptr);
+    CHECK(feed(wide, "\x1b[1;100000Hx"));
+    const VtReplayState wide_state = vt_replay_state(wide);
+    CHECK(wide_state.x == 100000 && wide_state.y == 0 && !wide_state.pending_wrap);
+    CHECK(strcmp(test_screen_cell(vt_replay_screen(wide), 99999, 0)->text, "x") == 0);
+    CHECK(feed(wide, "\x1b[1;100001H"));
+    CHECK(vt_replay_state(wide).x == 100000);
+    vt_replay_destroy(wide);
+    VtReplay *tall = vt_replay_create(1, 100001, classify);
+    CHECK(tall != nullptr);
+    CHECK(feed(tall, "\x1b[100000;1Hy"));
+    const VtReplayState tall_state = vt_replay_state(tall);
+    CHECK(tall_state.x == 0 && tall_state.y == 99999 && tall_state.pending_wrap);
+    CHECK(strcmp(test_screen_cell(vt_replay_screen(tall), 0, 99999)->text, "y") == 0);
+    CHECK(feed(tall, "\x1b[100001;1H"));
+    CHECK(vt_replay_state(tall).y == 100000);
+    vt_replay_destroy(tall);
+
+    /* A value past UINT32_MAX is rejected while parsing, never wrapped into
+     * range (4294967297 would wrap to 1). UINT32_MAX itself parses, then
+     * fails CUP's range check. */
+    CHECK_REJECTS(10, 5, "\x1b[4294967297;1H", "parameters");
+    CHECK_REJECTS(10, 5, "\x1b[1;4294967297H", "parameters");
+    CHECK_REJECTS(10, 5, "\x1b[4294967296;1H", "parameters");
+    CHECK_REJECTS(10, 5, "\x1b[99999999999999999999;1H", "parameters");
+    CHECK_REJECTS(10, 5, "\x1b[4294967295;1H", "inside the screen");
+    CHECK_REJECTS(10, 5, "\x1b[1;2147483648H", "inside the screen");
     return true;
 }
 
@@ -211,6 +241,9 @@ static bool test_sgr(void)
     CHECK_REJECTS(5, 1, "\x1b[29m", "\\x1b[29m");
     CHECK_REJECTS(5, 1, "\x1b[98m", "\\x1b[98m");
     CHECK_REJECTS(5, 1, "\x1b[108m", "\\x1b[108m");
+    /* Values that would wrap to 1 (bold, palette 1) are rejected, not wrapped. */
+    CHECK_REJECTS(5, 1, "\x1b[4294967297m", "\\x1b[4294967297m");
+    CHECK_REJECTS(5, 1, "\x1b[38;5;4294967297m", "\\x1b[38;5;4294967297m");
     return true;
 }
 
@@ -370,6 +403,8 @@ static bool test_modes(void)
     CHECK_REJECTS(4, 1, "\x1b[?25", "truncated");
     CHECK_REJECTS(4, 1, "\x1b[?25x", "\\x1b[?25x");
     CHECK_REJECTS(4, 1, "\x1b[25h", "\\x1b[25h");
+    /* 4294967321 would wrap to 25 (DECTCEM). */
+    CHECK_REJECTS(4, 1, "\x1b[?4294967321l", "\\x1b[?4294967321l");
     /* Entering the alternate screen forgets the cursor (strict side, R38). */
     CHECK_REJECTS(4, 1, "\x1b[1;2H\x1b[?1049hB", "cursor");
     return true;
@@ -441,8 +476,12 @@ static bool test_extenders(void)
     /* An extender with nothing printed just before it in this write. */
     CHECK_REJECTS(4, 1, "\x1b[1;1H\xcc\x81", "extender");
     CHECK_REJECTS(4, 1, "\x1b[1;1Ha\x1b[1m\xcc\x81", "extender");
-    /* A ZWJ at the end of a write joins nothing. */
-    CHECK_REJECTS(4, 1, "\x1b[1;1Ha\xe2\x80\x8d", "ZWJ");
+    /* A grapheme may end in ZWJ (R15): the end of the write ends it. */
+    VtReplay *open = vt_replay_create(4, 1, classify);
+    CHECK(open != nullptr);
+    CHECK(feed(open, "\x1b[1;1Ha\xe2\x80\x8d"));
+    CHECK(strcmp(test_screen_cell(vt_replay_screen(open), 0, 0)->text, "a\xe2\x80\x8d") == 0);
+    vt_replay_destroy(open);
     /* Exactly 15 bytes fit in one grapheme; 17 do not. */
     VtReplay *full = vt_replay_create(4, 1, classify);
     CHECK(full != nullptr);
@@ -458,6 +497,78 @@ static bool test_extenders(void)
     CHECK(!feed(split, "\xcc\x81"));
     CHECK(strstr(vt_replay_error(split), "extender") != nullptr);
     vt_replay_destroy(split);
+    return true;
+}
+
+/* R15 allows a cell whose grapheme ends in ZWJ: the end of a text call ends
+ * it. The oracle accepts that cell, and the next glyph must follow a CUP,
+ * because whether a terminal joins the two is terminal-dependent (R38). */
+static bool test_zwj_final(void)
+{
+    OvdStyle bold = OVD_STYLE_DEFAULT;
+    bold.attrs = OVD_ATTR_BOLD;
+
+    /* A frame whose last update ends in ZWJ: the closing reset ends the
+     * grapheme, and an expected row may end in ZWJ too. */
+    VtReplay *vt = vt_replay_create(4, 1, classify);
+    CHECK(vt != nullptr);
+    CHECK(feed(vt, "\x1b[1;1Hba\xe2\x80\x8d\x1b[0m"));
+    const char *const text[] = { "ba\xe2\x80\x8d" };
+    TestScreen *expected = rows_screen(4, 1, text, nullptr, nullptr, 0);
+    CHECK(expected != nullptr);
+    CHECK(test_screen_cell(expected, 1, 0)->length == 4);
+    CHECK_SCREEN(expected, vt_replay_screen(vt));
+    /* The next glyph needs a CUP first, even in a later write. */
+    CHECK(!feed(vt, "c"));
+    CHECK(strstr(vt_replay_error(vt), "no CUP") != nullptr);
+    test_screen_destroy(expected);
+    vt_replay_destroy(vt);
+
+    /* With a CUP between them: two cells, in one write or across two. */
+    TestScreen *two = test_screen_create(4, 1);
+    CHECK(two != nullptr);
+    test_screen_put(two, 0, 0, "a\xe2\x80\x8d", 4, 1, bold);
+    test_screen_put(two, 1, 0, "b", 1, 1, bold);
+    VtReplay *frame = vt_replay_create(4, 1, classify);
+    CHECK(frame != nullptr);
+    CHECK(feed(frame, "\x1b[?2026h\x1b[0m\x1b[2J\x1b[1;1H\x1b[1ma\xe2\x80\x8d\x1b[1;2Hb"
+                      "\x1b[0m\x1b[?2026l"));
+    CHECK_SCREEN(two, vt_replay_screen(frame));
+    vt_replay_destroy(frame);
+    VtReplay *split = vt_replay_create(4, 1, classify);
+    CHECK(split != nullptr);
+    CHECK(feed(split, "\x1b[1;1H\x1b[1ma\xe2\x80\x8d"));
+    CHECK(feed(split, "\x1b[1;2Hb\x1b[0m"));
+    CHECK_SCREEN(two, vt_replay_screen(split));
+    vt_replay_destroy(split);
+    test_screen_destroy(two);
+
+    /* The case the rule guards: woman + ZWJ, then girl in the next cell.
+     * In one run they are one family grapheme; a CUP keeps two cells. */
+    VtReplay *family = vt_replay_create(6, 1, classify);
+    CHECK(family != nullptr);
+    CHECK(feed(family, "\x1b[1;1H\xf0\x9f\x91\xa9\xe2\x80\x8d\x1b[1;3H\xf0\x9f\x91\xa7"));
+    const TestCell *woman = test_screen_cell(vt_replay_screen(family), 0, 0);
+    const TestCell *girl = test_screen_cell(vt_replay_screen(family), 2, 0);
+    CHECK(woman->width == 2 && woman->length == 7);
+    CHECK(girl->width == 2 && strcmp(girl->text, "\xf0\x9f\x91\xa7") == 0);
+    vt_replay_destroy(family);
+
+    /* In one run the code point after a ZWJ joins it (R15), as in the canvas. */
+    VtReplay *joined = vt_replay_create(4, 1, classify);
+    CHECK(joined != nullptr);
+    CHECK(feed(joined, "\x1b[1;1Ha\xe2\x80\x8d" "b"));
+    CHECK(strcmp(test_screen_cell(vt_replay_screen(joined), 0, 0)->text,
+                 "a\xe2\x80\x8d" "b") == 0);
+    CHECK(vt_replay_state(joined).x == 1);
+    vt_replay_destroy(joined);
+
+    /* Only a CUP separates them: not an SGR, ED 2, or another mode. */
+    CHECK_REJECTS(4, 1, "\x1b[1;1Ha\xe2\x80\x8d\x1b[1mb", "no CUP");
+    CHECK_REJECTS(4, 1, "\x1b[1;1Ha\xe2\x80\x8d\x1b[2Jb", "no CUP");
+    CHECK_REJECTS(4, 1, "\x1b[1;1Ha\xe2\x80\x8d\x1b[?25lb", "no CUP");
+    /* An extender after the sequence still has nothing to attach to. */
+    CHECK_REJECTS(4, 1, "\x1b[1;1Ha\xe2\x80\x8d\x1b[1m\xe2\x80\x8d", "extender");
     return true;
 }
 
@@ -493,6 +604,14 @@ static bool test_rows(void)
     const char *const lone[] = { "\xcc\x81" };
     CHECK(test_screen_from_rows(4, 1, classify, lone, nullptr, nullptr, 0, error,
                                 sizeof error) == nullptr);
+    /* A row segments like one text call: a ZWJ joins the next code point. */
+    const char *const joined_row[] = { "a\xe2\x80\x8d" "b" };
+    TestScreen *joined = test_screen_from_rows(4, 1, classify, joined_row, nullptr, nullptr, 0,
+                                               error, sizeof error);
+    CHECK(joined != nullptr);
+    CHECK(test_screen_cell(joined, 0, 0)->length == 5);
+    CHECK(strcmp(test_screen_cell(joined, 1, 0)->text, " ") == 0);
+    test_screen_destroy(joined);
 
     const char *const good_styles[] = { "rrr" };
     TestScreen *screen = test_screen_from_rows(4, 1, classify, text, good_styles, legend, 1,
@@ -531,6 +650,7 @@ int main(void)
         { "modes", test_modes },
         { "unknown_sequences", test_unknown_sequences },
         { "extenders", test_extenders },
+        { "zwj_final", test_zwj_final },
         { "rows", test_rows },
     };
     int failures = 0;

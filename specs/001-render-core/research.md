@@ -439,8 +439,10 @@ instead of passing by luck. Every rendering test inherits these rules:
 - The cursor is unknown until the first CUP and again after `?1049h` or
   `?1049l` (whether it survives the switch is terminal-dependent,
   ASSUMED); printing while it is unknown fails.
-- Encodings are exact: CUP has two explicit 1-based in-range
-  parameters without leading zeros; reset is `CSI 0 m` (`CSI m` is
+- Encodings are exact: every parameter is a decimal without leading
+  zeros, with no digit limit, so every in-range coordinate parses; a
+  value past `UINT32_MAX` is rejected, never wrapped into range. CUP has
+  two explicit 1-based in-range parameters; reset is `CSI 0 m` (`CSI m` is
   rejected); ED is only `CSI 2 J` and only in the default SGR state,
   because the erase color is terminal-dependent; a DEC private mode
   carries one parameter; colon sub-parameters, attribute-off codes, and
@@ -452,12 +454,19 @@ instead of passing by luck. Every rendering test inherits these rules:
   when both are set; the oracle keeps them as the independent `OvdAttr`
   bits the canvas holds, so it checks what was emitted, not what a
   terminal shows for that pair.
-- Every escape sequence ends a grapheme: an extender must follow its
-  base directly in the same write. So a cell whose grapheme ends in ZWJ
-  (R15 allows `a` + ZWJ at the end of a call's text) cannot pass the
-  oracle: the ZWJ would join the next cell's glyph, or join nothing
-  before a sequence or the end of a write, and the oracle rejects both.
-  OVD-08 must handle such cells, in the canvas rule or in the diff.
+- Every escape sequence ends a grapheme, and so does the end of a
+  write: an extender must follow its base directly in the same write.
+  A grapheme may end in ZWJ (R15 allows `a` + ZWJ at the end of a call's
+  text), and the oracle accepts that cell. Whether a terminal joins the
+  ZWJ to the next glyph across an SGR or a write boundary is
+  terminal-dependent, so the next glyph after such a cell must follow a
+  CUP; only a CUP clears this, not ED 2 or `?1049`. In one run the code
+  point after the ZWJ joins it, as in the canvas, so `a` ZWJ `b` written
+  together is one grapheme for any R15 reader. The diff (OVD-08)
+  therefore treats its cursor as unknown after such a cell, as after
+  R33's pending wrap: this is the one case where R8's "only when the
+  cursor is not already there" does not hold. That a CUP breaks a
+  terminal's ZWJ join is ASSUMED, for the OVD-12 manual checklist.
 - Overwriting one half of a wide glyph makes the other half
   indeterminate, never equal to anything, until it is overwritten:
   terminals disagree on what a split glyph shows.
