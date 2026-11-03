@@ -120,3 +120,5 @@ else()
     target_sources(overdrive PRIVATE src/platform/platform_posix.c)
 endif()
 target_sources(overdrive PRIVATE src/detect.c)
+
+target_sources(overdrive PRIVATE src/alloc.c src/output.c)
