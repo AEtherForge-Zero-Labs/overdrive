@@ -19,7 +19,7 @@ jobs:
           - { os: ubuntu-24.04, compiler: gcc-14, preset: debug }
           - { os: ubuntu-24.04, compiler: gcc-14, preset: release }
           - { os: ubuntu-24.04, compiler: gcc-14, preset: shared }
-          - { os: ubuntu-24.04, compiler: clang-18, preset: debug-clang }
+          - { os: ubuntu-24.04, compiler: clang-19, preset: debug-clang }
           - { os: macos-latest, compiler: cc, preset: debug }
           - { os: macos-latest, compiler: cc, preset: shared }
     env:
@@ -30,17 +30,23 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-14 clang-18 cmake ninja-build
-          if [ "$CC" = clang-18 ]; then
-            echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"
+          sudo apt-get install -y gcc-14 clang-19 cmake ninja-build
+          if [ "$CC" = clang-19 ]; then
+            echo /usr/lib/llvm-19/bin >> "$GITHUB_PATH"
           fi
       - name: Show toolchain
         run: |
-          "$CC" --version
           cmake --version
           ninja --version
       - name: Configure
         run: cmake --preset "${{ matrix.preset }}"
+      # The preset may name its own compiler (debug-clang sets clang), so
+      # report the one CMake configured, not $CC.
+      - name: Show configured compiler
+        run: |
+          compiler=$(sed -n 's/^CMAKE_C_COMPILER:[A-Z]*=//p' "build/${{ matrix.preset }}/CMakeCache.txt")
+          echo "CMAKE_C_COMPILER=$compiler"
+          "$compiler" --version
       - name: Build
         run: cmake --build --preset "${{ matrix.preset }}"
       - name: Test
