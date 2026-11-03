@@ -11,4 +11,4 @@
 
 - [x] 3.1 Run the debug, debug-clang, and shared presets with zero warnings; `ctest --preset debug -R test_canvas` passes.
 - [x] 3.2 Record R42 in `research.md` and tick T024 to T026.
-- [ ] 3.3 Reread the full diff and publish the PR with evidence.
+- [x] 3.3 Reread the full diff and publish the PR with evidence.
