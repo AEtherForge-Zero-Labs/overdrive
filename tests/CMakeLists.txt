@@ -104,3 +104,27 @@ target_sources(test_detect PRIVATE "${PROJECT_SOURCE_DIR}/src/detect.c")
 # The real environment lookup is tested against variables set for this test only.
 set_tests_properties(test_detect PROPERTIES ENVIRONMENT_MODIFICATION
     "OVD_TEST_DETECT_PROBE=set:probe-value;OVD_TEST_DETECT_UNSET=unset:;NO_COLOR=set:1")
+# The static archive lists every global symbol, hidden or not (R12): a hidden,
+# non-static generic name must still be rejected there.
+set(static_fixture "${CMAKE_CURRENT_BINARY_DIR}/export_static_bad.c")
+file(WRITE "${static_fixture}"
+    "#include <overdrive/core.h>\n"
+    "int generic_static_fixture(void) { return 1; }\n"
+    "OVD_API int ovd_static_fixture(void) { return generic_static_fixture(); }\n")
+add_library(export_static_bad STATIC "${static_fixture}")
+target_include_directories(export_static_bad PRIVATE "${PROJECT_SOURCE_DIR}/include")
+set_target_properties(export_static_bad PROPERTIES C_VISIBILITY_PRESET hidden)
+ovd_target_warnings(export_static_bad)
+file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/check_exports_static_negative.cmake" CONTENT "
+execute_process(COMMAND \"${CMAKE_COMMAND}\"
+    \"-DLIBRARY=$<TARGET_FILE:export_static_bad>\" \"-DLIBRARY_KIND=STATIC_LIBRARY\"
+    \"-DFORMAT=${export_format}\" \"-DNM=${CMAKE_NM}\" \"-DOBJDUMP=${CMAKE_OBJDUMP}\"
+    -P \"\${OVD_CHECK_EXPORTS}\"
+    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+if(result STREQUAL \"0\" OR NOT error MATCHES \"Non-ovd export: generic_static_fixture\")
+    message(FATAL_ERROR \"Expected the static generic rejection; got: \${output}\${error}\")
+endif()
+")
+add_test(NAME check_exports_static_rejects_generic COMMAND "${CMAKE_COMMAND}"
+    "-DOVD_CHECK_EXPORTS=${PROJECT_SOURCE_DIR}/cmake/check_exports.cmake"
+    -P "${CMAKE_CURRENT_BINARY_DIR}/check_exports_static_negative.cmake")
