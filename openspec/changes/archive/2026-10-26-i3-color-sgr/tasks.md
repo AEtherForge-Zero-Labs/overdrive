@@ -15,4 +15,4 @@
 
 ## 4. Review follow-ups
 
-- [x] 4.1 `src/color.h`: `OVD_COLOR_SGR_MAX_LENGTH` becomes `constexpr size_t` (Art. III), now that the Clang minimum is 19 (#37); the design note says so.
+- [x] 4.1 `src/color.h`: `OVD_COLOR_SGR_MAX_LENGTH` becomes `constexpr size_t` (Art. III), now that the Clang minimum is 19 (#37), and so does `src/color.c`'s `OVD_COLOR_ATTR_MASK` (`constexpr uint16_t`); the design note says so.

@@ -36,7 +36,9 @@ downsampling that matches R9 and is deterministic on ties.
   depth, so this only guards internal misuse).
 - `OVD_COLOR_SGR_MAX_LENGTH` (48) is a `constexpr size_t` (Art. III). It
   was first a macro, because the baseline's Clang 18 lacked C23 object
-  `constexpr`; #37 raised the minimum to 19.
+  `constexpr`; #37 raised the minimum to 19. The private attribute mask
+  `OVD_COLOR_ATTR_MASK` in `color.c` is a `constexpr uint16_t` for the
+  same reason.
 - Every non-static name is `ovd_color_…`: the export check also runs on
   the static archive and rejects any global symbol without `ovd_`.
 - Encode into a local buffer, then copy only when it fits: a refused

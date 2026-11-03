@@ -4,9 +4,9 @@
 #include <string.h>
 
 /* Attribute bits defined by OvdAttr; anything else is dropped. */
-#define OVD_COLOR_ATTR_MASK \
-    ((uint16_t)(OVD_ATTR_BOLD | OVD_ATTR_DIM | OVD_ATTR_ITALIC | OVD_ATTR_UNDERLINE \
-                | OVD_ATTR_REVERSE | OVD_ATTR_STRIKETHROUGH))
+constexpr uint16_t OVD_COLOR_ATTR_MASK =
+    (uint16_t)(OVD_ATTR_BOLD | OVD_ATTR_DIM | OVD_ATTR_ITALIC | OVD_ATTR_UNDERLINE
+               | OVD_ATTR_REVERSE | OVD_ATTR_STRIKETHROUGH);
 
 /* xterm's default values for palette entries 0-15 (xterm's XTerm-col.ad
  * resources color0-color15; research R37). */
