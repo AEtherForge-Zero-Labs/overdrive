@@ -1,0 +1,24 @@
+## 1. Records
+
+- [x] 1.1 research.md: R41 records Clang 18's missing object `constexpr`, the Clang 19 minimum, and the measured CI tool versions; R12 states that every non-static symbol carries `ovd_`
+- [x] 1.2 baseline.md: raise the Clang minimum to 19; note runner-provided CMake and floating `macos-latest`
+- [x] 1.3 AGENTS.md "C rules": state the export rule; keep the `constexpr` line
+- [x] 1.4 Tick T001–T009 in specs/001-render-core/tasks.md
+- [x] 1.5 Archive `openspec/changes/i2-build-core/`
+
+## 2. Tests
+
+- [x] 2.1 `src/core.c`: remove `default:` from `ovd_result_name`; watch a scratch enumerator fail the build, then pass without it
+- [x] 2.2 `tests/CMakeLists.txt`: static-archive negative fixture rejected with "Non-ovd export"; watch it fail against a check that skips static archives
+
+## 3. CI
+
+- [x] 3.1 ci.yml: the native job prints the configured compiler's version after configure
+- [x] 3.2 Open the owner issue for requiring `ci-ok` in the ruleset
+- [x] 3.3 ci.yml: the Clang job installs and uses `clang-19`
+- [x] 3.4 `CMakeLists.txt`: the configure check requires Clang 19, as the baseline does (found in review); watch Clang 18.1.3 pass the check before and fail after
+
+## 4. Checks
+
+- [x] 4.1 debug, debug-clang, shared, release, and windows-cross-debug build with no warnings and pass ctest
+- [x] 4.2 `openspec validate --all --strict` and the docs form check pass

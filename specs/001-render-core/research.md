@@ -115,7 +115,10 @@ against Microsoft and POSIX documentation during the platform issue
 (`BUILD_SHARED_LIBS`); `C_VISIBILITY_PRESET hidden`; `OVD_API` on public
 declarations. A `cmake -P` check lists exported symbols (`nm` on
 ELF/Mach-O; `objdump -p` export table on PE) and fails on any without
-`ovd_` (FR-040). `nm`/`objdump` come with the declared toolchains.
+`ovd_` (FR-040). `nm`/`objdump` come with the declared toolchains. On a
+static archive the listing has every global symbol, hidden or not, so
+the rule the check enforces is: every non-static symbol in the library
+carries `ovd_` (R41).
 
 **R13 — Tests.** Plain C test executables registered with CTest, no
 framework (Art. VII). Expected screens written as text rows (Art. VI).
@@ -452,3 +455,31 @@ Each takes the narrowest reading (issue #7, labeled `assumption`).
   redirected handle (the "is a terminal" test), and `srWindow`'s corners
   are inclusive (size = difference + 1). Both are on the OVD-12 manual
   checklist.
+
+### Build records (OVD-01 review, #28)
+
+**R41 — Clang 19 minimum, export rule, and CI facts.** Checked on
+2026-11-02 and 2026-11-03; labeled `assumption`.
+- Clang 18 lacks C23 object `constexpr`: Clang's C status page
+  (clang.llvm.org/c_status.html) lists "constexpr for object
+  definitions" (N3018) from Clang 19. Constitution Art. III asks for
+  `constexpr` in named constants, and the baseline is subordinate to
+  it, so the Clang minimum is raised to 19, in the baseline and in the
+  configure check in `CMakeLists.txt`. CI's Clang job moves to
+  `clang-19`, which Ubuntu 24.04 ships in universe (19.1.1,
+  packages.ubuntu.com/noble/clang-19). Named constants that worked
+  around Clang 18 with a macro or an enum can now be `constexpr`.
+  *Rejected:* keeping Clang 18 and not using object `constexpr`, which
+  would put `AGENTS.md` and new code against Art. III.
+- Export rule (R12): the check runs on the static archive too, where
+  hidden symbols are listed, so every non-static symbol carries `ovd_`.
+  The `check_exports_static_rejects_generic` test pins it with a hidden
+  generic name. *Rejected:* checking only the shared library, which lets
+  a generic hidden name collide in a consumer's static link.
+- `ovd_result_name` has no `default:`, so `-Wswitch` under `-Werror`
+  fails the build for an `OvdResult` enumerator it does not name.
+- CI builds with GCC 14 and Clang 19 but does not exercise the CMake or
+  Apple Clang minimums. The last `library-ci` run on `main` before this
+  change used CMake 3.31.6 on `ubuntu-24.04` and, on `macos-latest`
+  (then `macos-26-arm64`), CMake 4.4.4 with Apple clang 21.0.0. Those
+  minimums are checked by hand, per baseline.
