@@ -110,7 +110,9 @@ These summarize the constitution. They don't replace it.
   `OvdPascalCase`; constants and enumerators `OVD_UPPER_SNAKE`; build
   options `OVERDRIVE_*` (Art. XIV).
 - Internal functions are `static`, or declared in a private header under
-  `src/` without `OVD_API`. Never export a generic name.
+  `src/` without `OVD_API`. Every non-static symbol carries `ovd_`, hidden
+  or not: the export check lists the static archive, where hidden symbols
+  appear (research R12).
 - No OS header in a public header. Platform code stays in `src/platform/`.
 - Closed sets are `enum`s with a fixed underlying type (Art. III).
 - Use C23 where it carries meaning: `bool`, `nullptr`, `[[nodiscard]]`,

@@ -10,15 +10,15 @@ Every behavior task is preceded by its test task, which must be seen failing.
 
 ## Phase 0 — OVD-01 Build skeleton, CI, public headers, core (blocks everything)
 
-- [ ] T001 Create `CMakeLists.txt`: C23, extensions off, `-Wall -Wextra -Wpedantic -Werror` (GCC/Clang), target `overdrive` + alias `overdrive::overdrive`, `C_VISIBILITY_PRESET hidden`, `OVERDRIVE_BUILDING`/`OVERDRIVE_SHARED` definitions, options `OVERDRIVE_BUILD_TESTS`, `OVERDRIVE_BUILD_EXAMPLES`, compiler-version check per baseline
-- [ ] T002 Create `CMakePresets.json`: `debug`, `release`, `debug-clang`, `shared`, `windows-cross-debug` (MinGW + Wine emulator); test presets with `noTestsAction: error`
-- [ ] T003 Copy the approved contract headers into `include/overdrive/` unchanged (`overdrive.h`, `core.h`, `terminal.h`, `render.h`) — contract freeze point
-- [ ] T004 Create `tests/CMakeLists.txt` with `ovd_add_test(<name>)` helper (one line per test, append-only)
-- [ ] T005 Write `tests/test_core.c`: result names for every enumerator and an out-of-range value; `ovd_version()` equals header macros
-- [ ] T006 Implement `src/core.c`: `ovd_result_name`, `ovd_version`
-- [ ] T007 Create `cmake/check_exports.cmake` and a `check_exports` CTest: fail on any exported symbol without `ovd_` (nm for ELF/Mach-O, objdump export table for PE) (FR-040)
-- [ ] T008 Create `.github/workflows/ci.yml`: Linux GCC 14 debug+release, Linux Clang debug, macOS Apple Clang debug, MinGW cross + Wine; each runs the presets' configure/build/test; one `ci-ok` aggregate job
-- [ ] T009 Add a header self-containment test: each public header compiles alone (`tests/test_headers.c` + generated per-header TUs in the build tree) and contains no OS include (FR-041)
+- [x] T001 Create `CMakeLists.txt`: C23, extensions off, `-Wall -Wextra -Wpedantic -Werror` (GCC/Clang), target `overdrive` + alias `overdrive::overdrive`, `C_VISIBILITY_PRESET hidden`, `OVERDRIVE_BUILDING`/`OVERDRIVE_SHARED` definitions, options `OVERDRIVE_BUILD_TESTS`, `OVERDRIVE_BUILD_EXAMPLES`, compiler-version check per baseline
+- [x] T002 Create `CMakePresets.json`: `debug`, `release`, `debug-clang`, `shared`, `windows-cross-debug` (MinGW + Wine emulator); test presets with `noTestsAction: error`
+- [x] T003 Copy the approved contract headers into `include/overdrive/` unchanged (`overdrive.h`, `core.h`, `terminal.h`, `render.h`) — contract freeze point
+- [x] T004 Create `tests/CMakeLists.txt` with `ovd_add_test(<name>)` helper (one line per test, append-only)
+- [x] T005 Write `tests/test_core.c`: result names for every enumerator and an out-of-range value; `ovd_version()` equals header macros
+- [x] T006 Implement `src/core.c`: `ovd_result_name`, `ovd_version`
+- [x] T007 Create `cmake/check_exports.cmake` and a `check_exports` CTest: fail on any exported symbol without `ovd_` (nm for ELF/Mach-O, objdump export table for PE) (FR-040)
+- [x] T008 Create `.github/workflows/ci.yml`: Linux GCC 14 debug+release, Linux Clang debug, macOS Apple Clang debug, MinGW cross + Wine; each runs the presets' configure/build/test; one `ci-ok` aggregate job
+- [x] T009 Add a header self-containment test: each public header compiles alone (`tests/test_headers.c` + generated per-header TUs in the build tree) and contains no OS include (FR-041)
 
 ## Phase 1 — Primitives (parallel lanes; each depends on OVD-01)
 
