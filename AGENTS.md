@@ -180,8 +180,9 @@ Co-Authored-By: <the tool's own co-author line, if it adds one>
 ```
 
 The trailers are the last paragraph, alone. `Refs #<number>` is not a
-trailer (no colon), and git ignores a final paragraph that mixes it with
-trailers, so the guard would see no disclosure. Check with
+trailer (no colon). git parses a mixed final paragraph as trailers only
+when one of them is git-generated or configured, which these are not, so
+the guard would see no disclosure. Check with
 `git log -1 --format=%B | git interpret-trailers --parse`.
 
 - Conventional Commits. `type` is one of `feat`, `fix`, `docs`, `build`,
