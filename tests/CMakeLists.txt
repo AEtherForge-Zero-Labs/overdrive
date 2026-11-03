@@ -144,3 +144,6 @@ target_sources(test_canvas PRIVATE support/test_alloc.c
     "${PROJECT_SOURCE_DIR}/src/canvas.c" "${PROJECT_SOURCE_DIR}/src/unicode.c")
 target_include_directories(test_canvas PRIVATE "${PROJECT_BINARY_DIR}/generated")
 add_dependencies(test_canvas ovd_unicode_tables)
+# canvas.c defines OVD_API functions: compiled here it is Overdrive's own code,
+# so a Windows shared build must see them as dllexport, not dllimport.
+target_compile_definitions(test_canvas PRIVATE OVERDRIVE_BUILDING)

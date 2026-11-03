@@ -100,6 +100,18 @@ style downsampling (OVD-02).
   no terminal yet. Shared builds hide the internal symbols, so the test
   compiles `buffer.c`, `canvas.c`, `unicode.c`, and `alloc.c` in, as
   `test_unicode` and `test_alloc` do.
+  - `canvas.c` is the first such file that defines `OVD_API` functions.
+    Compiled into a test linked as a consumer of a Windows DLL, render.h
+    declares those functions `dllimport`, and defining them fails under
+    `-Werror` ("redeclared without dllimport attribute"). Review found
+    this, and CI's MinGW job failed on it.
+  - The fix: `test_canvas` is compiled with `OVERDRIVE_BUILDING`. In
+    core.h's terms, the test compiles Overdrive's own code, so the
+    functions are `dllexport` and the test's calls bind to its own copy,
+    as they already do on ELF and Mach-O.
+  - *Rejected:* leaving `canvas.c` out of the test. The test would then
+    call the DLL's public functions on a canvas opened by its own copy
+    of `ovd_canvas_open`, mixing two copies of the module.
 
 ## Risks / Trade-offs
 

@@ -12,3 +12,7 @@
 - [x] 3.1 Run the debug, debug-clang, and shared presets with zero warnings; `ctest --preset debug -R test_canvas` passes.
 - [x] 3.2 Record R42 in `research.md` and tick T024 to T026.
 - [x] 3.3 Reread the full diff and publish the PR with evidence.
+
+## 4. Review fixes
+
+- [x] 4.1 `tests/CMakeLists.txt`: `test_canvas` is compiled with `OVERDRIVE_BUILDING`, so `canvas.c`'s `OVD_API` definitions are not `dllimport` in a Windows shared build (found in review and by CI's MinGW job). Seen failing on `windows-cross-shared`, then all six presets green.
