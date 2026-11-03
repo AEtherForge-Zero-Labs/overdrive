@@ -213,8 +213,8 @@ grapheme in `text`, saturating at `INT32_MAX`.
 **R19 — Cut wide glyphs.** If either half of a wide grapheme would fall
 outside the clip or the canvas, its half that is inside (if any) is drawn
 as a space in the call's style, and the outside half is untouched except
-for R20's repair. This covers the left edge, which the spec's edge case omitted. The text still
-advances two columns.
+for R20's repair. This covers the left edge, which the spec's edge case
+omitted. The text still advances two columns.
 
 **R20 — Pairing beats the clip.** The buffer never holds half of a wide
 grapheme. When a draw overwrites one half of a wide grapheme whose other
@@ -245,11 +245,11 @@ for out-of-range `OvdBackend`/`OvdColorDepth` (`color_depth` is validated
 even when detection will override it), and for an allocator whose
 functions are nullptr. `headless_size` is validated only for the headless
 backend. Infallible functions given nullptr do nothing and return zero
-values; `ovd_canvas_text` then returns 0. Out-of-range values that can't fail are normalized:
-an unknown `OvdColorKind` is stored, and reads back, as
-`OVD_COLOR_KIND_DEFAULT`; unknown attribute bits
-are dropped, and an unknown `OvdBorder` draws nothing. Cells store
-colors with only their kind's fields set, so equal-looking colors compare
+values; `ovd_canvas_text` then returns 0. Out-of-range values that
+can't fail are normalized: an unknown `OvdColorKind` is stored, and
+reads back, as `OVD_COLOR_KIND_DEFAULT`; unknown attribute bits are
+dropped, and an unknown `OvdBorder` draws nothing. Cells store colors
+with only their kind's fields set, so equal-looking colors compare
 equal.
 
 **R23 — One canvas per terminal, closed between frames.** The canvas
@@ -287,12 +287,14 @@ can only be read back by querying the terminal (which needs input, out of
 scope) is set on exit to its default: `CSI 0 m`, `CSI ? 7 h` (autowrap),
 `CSI ? 25 h` (cursor visible), then `CSI ? 1049 l` if the alternate screen
 was entered, or else a cursor move to column 0 of the last row of the
-last frame's size. Screen contents and scrollback are preserved only
-through the alternate screen (the default; xterm's mode 1049 saves the
-cursor, switches to the alternate screen, and restores both on leave).
-With `alternate_screen = false` the last frame stays on screen.
-Assumption: before create, the cursor was visible and autowrap on, which
-is the normal shell state.
+last frame's size. If no frame has ended (destroy right after create,
+or R28's rollback of a failed enter write), it is the last row of the
+size read at create (R28 step 5). Screen contents and scrollback are
+preserved only through the alternate screen (the default; xterm's mode
+1049 saves the cursor, switches to the alternate screen, and restores
+both on leave). With `alternate_screen = false` the last frame stays on
+screen. Assumption: before create, the cursor was visible and autowrap
+on, which is the normal shell state.
 
 **R27 — Echo only.** The system backend turns off input echo and nothing
 else on the input side: POSIX `ECHO`, Windows `ENABLE_ECHO_INPUT`. R11's
@@ -318,10 +320,16 @@ Each completed step is recorded. A failure undoes the recorded steps in
 reverse and returns the error. If step 7's write fails, part of the enter
 sequence may have reached the terminal, so the R26 exit sequence is
 written best-effort before undoing steps 4, 3, 2, and create returns
-`OVD_ERROR_IO`. Destroy abandons any open frame, writes
-the R26 exit sequence in one write, then undoes steps 4, 3, 2 in that
-order, and frees. Every undo is attempted even if an earlier one failed;
-destroy cannot report failure.
+`OVD_ERROR_IO`. That exit sequence counts the alternate screen as
+entered whenever it was configured, so it includes `CSI ? 1049 l`: the
+failed write does not show whether `CSI ? 1049 h` took effect. A
+needless `CSI ? 1049 l` restores the cursor as DECRC does (the xterm
+reference cited in R33), and DECRC with nothing saved moves the cursor
+home (vt100.net/docs/vt510-rm/DECRC.html); a missing one would leave
+the shell on the alternate screen. Both are cited, not observed.
+Destroy abandons any open frame, writes the R26 exit sequence in one
+write, then undoes steps 4, 3, 2 in that order, and frees. Every undo is
+attempted even if an earlier one failed; destroy cannot report failure.
 
 **R29 — Two system terminals.** No process-wide state (FR-002), so
 nothing detects a second system terminal. Each restores what it saw at
@@ -335,9 +343,10 @@ the output buffer is allocated to the worst-case size of one frame's
 output at that size. That bound is fixed overhead (synchronized-output
 markers 16 bytes, full-redraw prefix 8, trailing reset 4) plus cells ×
 (max cursor move + max SGR, with every attribute and two RGB colors + 15
-glyph bytes), computed by the diff module from the encodings it emits. `ovd_frame_end` never allocates, so it has no
-`OVD_ERROR_ALLOCATION` and SC-004 holds for any content. The output module
-refuses appends past capacity. If that ever happens (a bug), the frame
+glyph bytes), computed by the diff module from the encodings it emits.
+`ovd_frame_end` never allocates, so it has no `OVD_ERROR_ALLOCATION` and
+SC-004 holds for any content. The output module refuses appends past
+capacity. If that ever happens (a bug), the frame
 fails with `OVD_ERROR_IO`, nothing is written, and the next frame is a
 full redraw. Tests drive adversarial frames against the bound.
 *Rejected:* growing in frame end, which breaks SC-004 and needs an error
@@ -379,9 +388,10 @@ the bottom-right cell is safe", which made FR-024 depend on autowrap.
 
 An unchanged frame writes nothing at all. Mode 2026 is the synchronized
 output convention proposed for terminal emulators
-(gist.github.com/christianparpart/d8a62cc1ab659194337d73e399004036);
-terminals without it ignore an unknown DEC private mode, per ECMA-48's
-handling of unrecognized controls.
+(gist.github.com/christianparpart/d8a62cc1ab659194337d73e399004036).
+That a terminal without it ignores `CSI ? 2026 h` and `l` is ASSUMED
+(Art. X): the proposal does not say so, and detects support with DECRQM,
+which needs input (out of scope).
 - "Single write" (FR-022) means one contiguous buffer: one sink call
   (headless), or one write loop with nothing interleaved (system).
 
@@ -407,3 +417,38 @@ saving and restoring the screen (R26), terminals ignoring mode 2026 when
 unsupported (R34), and the Windows console modes (R28). They are checked
 by hand in real terminals through the manual checklist (OVD-12), and any
 difference found becomes a spec change.
+
+### Platform and detection (OVD-06)
+
+**R40 — Platform-layer choices.** R10, R11, and R25–R28 leave these open.
+Each takes the narrowest reading (issue #7, labeled `assumption`).
+- `ovd_platform_enter` performs R28 steps 2–4 and undoes them itself on
+  failure. Steps 1 and 5 are separate queries; steps 6 and 7 are the
+  system backend's. The values read are kept in the caller's
+  `OvdPlatformModes`, an aligned byte area that each platform file
+  checks with `static_assert`, so no OS type reaches `platform.h` (R11).
+  POSIX keeps the whole `struct termios`, because R26 restores "the
+  values read".
+- Windows step 2 also sets `ENABLE_PROCESSED_OUTPUT`: Microsoft's
+  `SetConsoleMode` reference says, at
+  `ENABLE_VIRTUAL_TERMINAL_PROCESSING`, "Ensure ENABLE_PROCESSED_OUTPUT
+  is set when using this flag". The flag is on by default, and leave
+  restores the whole mode read at enter.
+- POSIX `tcsetattr` "shall return successfully if it was able to perform
+  any of the requested actions", so enter reads the modes back and
+  fails, restoring them, if `ECHO` is still set. Both directions use
+  `TCSANOW`: pending input is the user's, so it is not flushed.
+- The size comes from `ioctl(TIOCGWINSZ)`, which is not POSIX (Linux
+  man-pages `TIOCGWINSZ(2const)`; the macOS SDK's `sys/ttycom.h`).
+  POSIX Issue 8's `tcgetwinsize` is the standard form, but the macOS SDK
+  does not declare it.
+- A write that accepts zero bytes for a non-zero request is a failure, on
+  both platforms, so the loop cannot spin. Each call asks for at most
+  `SSIZE_MAX` (POSIX) or `MAXDWORD` (Windows) bytes.
+- R10's "Windows with VT enabled" comes from
+  `ovd_platform_virtual_terminal`: true only if the Windows output-mode
+  step is recorded. Detection stays platform-independent.
+- INFERRED, not stated by Microsoft: `GetConsoleMode` fails for a
+  redirected handle (the "is a terminal" test), and `srWindow`'s corners
+  are inclusive (size = difference + 1). Both are on the OVD-12 manual
+  checklist.

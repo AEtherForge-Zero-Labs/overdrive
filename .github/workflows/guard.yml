@@ -1,0 +1,39 @@
+# Tests the Claude Code guard hook (.claude/hooks/guard.sh) offline. It
+# neither builds nor tests the library.
+name: guard
+
+on: pull_request
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: guard tests / ${{ matrix.os }} / ${{ matrix.shell }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, shell: bash }
+          # macOS /bin/bash is 3.2, the oldest bash the guard must run under.
+          - { os: macos-latest, shell: /bin/bash }
+    steps:
+      - uses: actions/checkout@v7
+      - name: Show tools
+        run: |
+          ${{ matrix.shell }} --version | head -1
+          jq --version
+      - name: Run guard tests
+        run: ${{ matrix.shell }} .claude/hooks/test_guard.sh
+
+  guard-tests:
+    name: guard-tests
+    if: always()
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every guard test job
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+        run: test "$TEST_RESULT" = success

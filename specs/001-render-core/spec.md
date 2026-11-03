@@ -177,9 +177,10 @@ required for correctness.
 - Drawing on the canvas after its frame ended: no effect;
   `ovd_canvas_text` returns 0 and `ovd_canvas_set_clip` stores nothing
   and returns `{0, 0, 0, 0}` (R23).
-- The sink calling back into its own terminal: begin, end, and set_size
-  return `OVD_ERROR_STATE`; the canvas is already closed; size and color
-  depth queries return their normal values (R24).
+- The sink calling back into its own terminal: only begin, end, and
+  set_size return `OVD_ERROR_STATE`; abandon and invalidate do nothing;
+  the canvas is already closed; size and color depth queries return
+  their normal values; destroy is undefined (R24).
 - A failed `ovd_frame_begin`: `ovd_terminal_size` is unchanged, and a
   pending headless `ovd_terminal_set_size` stays pending (R21).
 - stdin not a terminal (system backend): the echo step is skipped (R27).
@@ -280,8 +281,9 @@ required for correctness.
 - **SC-002**: An unchanged frame writes 0 bytes.
 - **SC-003**: Changing one narrow cell writes at most 64 bytes at
   truecolor depth with both colors RGB, no attributes, and
-  `synchronized_output` off, at sizes up to 999×999 (budget: cursor move ≤ 10, SGR with two RGB colors ≤ 40, glyph ≤
-  4, reset 4, plus margin; measured by the benchmark).
+  `synchronized_output` off, at sizes up to 999×999 (budget: cursor
+  move ≤ 10, SGR with two RGB colors ≤ 40, glyph ≤ 4, reset 4, plus
+  margin; measured by the benchmark).
 - **SC-004**: Frames whose size equals the terminal's current buffers make
   0 allocator calls, whatever they draw (R30–R32; measured by the
   allocation test).
