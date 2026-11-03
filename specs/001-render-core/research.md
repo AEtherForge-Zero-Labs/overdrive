@@ -205,6 +205,22 @@ base like any other (following extenders attach to it):
 The Unicode version stays a documented assumption of OVD-03 (§D.4); it is
 recorded once, in `cmake/gen_unicode_tables.cmake`, and cited here.
 
+**Unicode version pin (OVD-03, #4; assumption, §D.4).** Unicode
+**18.0.0**: the latest released version on 2026-10-26, when
+`https://www.unicode.org/Public/UCD/latest/ReadMe.txt` named it final.
+`third_party/ucd/` holds its `EastAsianWidth.txt` and
+`extracted/DerivedGeneralCategory.txt` unchanged (headers dated
+2026-06-29) with the Unicode License v3, and the generator rejects files
+of any other version. R15's recalled properties, checked against these
+files: U+200D, U+00AD, U+200B, U+0600–U+0605, U+FEFF, and every R17 bidi
+control are Cf; U+FE00–U+FE0F and U+E0100–U+E01EF are Mn; so R15's
+extenders are exactly Mn, Me, and Cf minus the bidi controls.
+`EastAsianWidth.txt` has one `@missing` line (`0000..10FFFF; N`); its
+header states the W defaults for U+3400–U+4DBF, U+4E00–U+9FFF,
+U+F900–U+FAFF, and planes 2 and 3, and in 18.0.0 every such code point
+is listed explicitly as W. The generator still applies `@missing` lines.
+*Rejected:* 17.0.0 (superseded); a beta of a later version (not released).
+
 ### Clipping
 
 **R18 — Overflow-safe geometry.** Rect and coordinate arithmetic is done
@@ -367,6 +383,25 @@ never nullptr. Size computations are overflow-checked; overflow is
 `OVD_ERROR_ALLOCATION` with no allocator call. Allocation happens only in
 `ovd_terminal_create` and in an `ovd_frame_begin` whose size differs from
 the current buffers; nothing else allocates.
+
+**R39 — Allocation dispatch and output buffer (OVD-04).** Assumptions
+where R30–R32 are silent, labeled `assumption`. The issue body's "output
+buffer grows geometrically" predates R30/R31 and is not implemented: the
+buffer never grows.
+- A zero element count or element size is `OVD_ERROR_INVALID_ARGUMENT`
+  with no allocator call (a caller bug; `allocate` never sees 0).
+- A batch checks every request's size before its first allocator call;
+  on a refusal it releases what it took in reverse order. On any
+  failure, argument errors included, every output block is empty.
+- R31's allocate-then-release is a batch allocation of all new blocks,
+  then each owner adopting its new block and releasing its old one. No
+  callback interface (Art. VII).
+- `OvdOutput` never allocates; it adopts a block whose size is its
+  capacity. A failed append writes nothing; failing the frame is the
+  terminal's decision (R30).
+- `OvdOutput` is declared in the private header so the terminal embeds it
+  without another allocation; only `src/output.c` touches its fields
+  (Art. IV tension, resolved in the doc comment).
 
 ### Protocol and backends
 

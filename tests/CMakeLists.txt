@@ -128,6 +128,15 @@ endif()
 add_test(NAME check_exports_static_rejects_generic COMMAND "${CMAKE_COMMAND}"
     "-DOVD_CHECK_EXPORTS=${PROJECT_SOURCE_DIR}/cmake/check_exports.cmake"
     -P "${CMAKE_CURRENT_BINARY_DIR}/check_exports_static_negative.cmake")
+ovd_add_test(test_alloc)
+# Shared builds hide internal symbols, so the test compiles the modules it tests.
+target_sources(test_alloc PRIVATE support/test_alloc.c
+    "${PROJECT_SOURCE_DIR}/src/alloc.c" "${PROJECT_SOURCE_DIR}/src/output.c")
+ovd_add_test(test_unicode)
+# The iterator is hidden in the shared library, so the test compiles it in.
+target_sources(test_unicode PRIVATE "${PROJECT_SOURCE_DIR}/src/unicode.c")
+target_include_directories(test_unicode PRIVATE "${PROJECT_BINARY_DIR}/generated")
+add_dependencies(test_unicode ovd_unicode_tables)
 
 # Replay interpreter and screen model: the oracle for rendering tests (SC-001).
 add_library(overdrive_vt_replay STATIC support/screen.c support/vt_replay.c)
