@@ -56,8 +56,8 @@ Every behavior task is preceded by its test task, which must be seen failing.
 ## Phase 3 — Rendering (parallel pair)
 
 ### OVD-08 Differential renderer (depends on OVD-02, OVD-04, OVD-05, OVD-07)
-- [ ] T027 [US1] Write `tests/test_diff.c`: replay equivalence (SC-001) over a corpus of frames incl. random frames from a fixed seed; unchanged frame → 0 bytes (SC-002); one-cell change ≤ 64 bytes (SC-003); full redraw after unknown screen; bottom-right cell; depth 16/256/NONE output; adversarial frames (alternating styles, all-RGB, max-length graphemes) never exceed the output bound (R30); output framing (R34)
-- [ ] T028 [US1] Implement `src/diff.h`/`src/diff.c` (R8)
+- [x] T027 [US1] Write `tests/test_diff.c`: replay equivalence (SC-001) over a corpus of frames incl. random frames from a fixed seed; unchanged frame → 0 bytes (SC-002); one-cell change ≤ 64 bytes (SC-003); full redraw after unknown screen; bottom-right cell; depth 16/256/NONE output; adversarial frames (alternating styles, all-RGB, max-length graphemes) never exceed the output bound (R30); output framing (R34)
+- [x] T028 [US1] Implement `src/diff.h`/`src/diff.c` (R8)
 
 ### OVD-09 Boxes [P] (depends on OVD-07)
 - [ ] T029 [P] [US3] Write `tests/test_box.c`: five border styles, clip, small rects draw nothing, interior untouched
