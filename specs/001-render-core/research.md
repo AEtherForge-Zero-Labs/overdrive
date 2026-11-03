@@ -464,7 +464,8 @@ Each takes the narrowest reading (issue #7, labeled `assumption`).
   (clang.llvm.org/c_status.html) lists "constexpr for object
   definitions" (N3018) from Clang 19. Constitution Art. III asks for
   `constexpr` in named constants, and the baseline is subordinate to
-  it, so the Clang minimum is raised to 19 and CI's Clang job moves to
+  it, so the Clang minimum is raised to 19, in the baseline and in the
+  configure check in `CMakeLists.txt`. CI's Clang job moves to
   `clang-19`, which Ubuntu 24.04 ships in universe (19.1.1,
   packages.ubuntu.com/noble/clang-19). Named constants that worked
   around Clang 18 with a macro or an enum can now be `constexpr`.

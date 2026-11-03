@@ -24,6 +24,8 @@ for objects. The stated export rule is looser than the check that runs.
     unhandled.
   - `tests/CMakeLists.txt` adds a static-archive negative fixture for
     the export check.
+- Build: the configure check in `CMakeLists.txt` requires Clang 19,
+  matching the baseline.
 - CI:
   - The Clang job moves from `clang-18` to `clang-19`, the new minimum.
   - `baseline.md` notes that CI uses the runner image's CMake and a

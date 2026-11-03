@@ -27,7 +27,8 @@ and the baseline is subordinate to it, so the baseline cannot keep a
 compiler that rejects object `constexpr`. Open PRs already work around
 Clang 18 with macros and enums. Ubuntu 24.04 ships `clang-19` 19.1.1 in
 universe (packages.ubuntu.com/noble/clang-19), so CI's Clang job moves
-to it and `AGENTS.md` keeps its `constexpr` line. *Rejected:* the
+to it and `AGENTS.md` keeps its `constexpr` line. The configure check
+in `CMakeLists.txt` moves to 19 with the baseline. *Rejected:* the
 issue's second option, keeping Clang 18 and narrowing `AGENTS.md`. It
 was drafted that way first, and the vocabulary scan before close showed
 it contradicts Art. III.

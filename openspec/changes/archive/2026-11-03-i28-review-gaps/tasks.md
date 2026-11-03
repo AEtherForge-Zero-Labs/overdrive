@@ -16,6 +16,7 @@
 - [x] 3.1 ci.yml: the native job prints the configured compiler's version after configure
 - [x] 3.2 Open the owner issue for requiring `ci-ok` in the ruleset
 - [x] 3.3 ci.yml: the Clang job installs and uses `clang-19`
+- [x] 3.4 `CMakeLists.txt`: the configure check requires Clang 19, as the baseline does (found in review); watch Clang 18.1.3 pass the check before and fail after
 
 ## 4. Checks
 
