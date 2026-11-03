@@ -407,3 +407,38 @@ saving and restoring the screen (R26), terminals ignoring mode 2026 when
 unsupported (R34), and the Windows console modes (R28). They are checked
 by hand in real terminals through the manual checklist (OVD-12), and any
 difference found becomes a spec change.
+
+### Platform and detection (OVD-06)
+
+**R40 — Platform-layer choices.** R10, R11, and R25–R28 leave these open.
+Each takes the narrowest reading (issue #7, labeled `assumption`).
+- `ovd_platform_enter` performs R28 steps 2–4 and undoes them itself on
+  failure. Steps 1 and 5 are separate queries; steps 6 and 7 are the
+  system backend's. The values read are kept in the caller's
+  `OvdPlatformModes`, an aligned byte area that each platform file
+  checks with `static_assert`, so no OS type reaches `platform.h` (R11).
+  POSIX keeps the whole `struct termios`, because R26 restores "the
+  values read".
+- Windows step 2 also sets `ENABLE_PROCESSED_OUTPUT`: Microsoft's
+  `SetConsoleMode` reference says, at
+  `ENABLE_VIRTUAL_TERMINAL_PROCESSING`, "Ensure ENABLE_PROCESSED_OUTPUT
+  is set when using this flag". The flag is on by default, and leave
+  restores the whole mode read at enter.
+- POSIX `tcsetattr` "shall return successfully if it was able to perform
+  any of the requested actions", so enter reads the modes back and
+  fails, restoring them, if `ECHO` is still set. Both directions use
+  `TCSANOW`: pending input is the user's, so it is not flushed.
+- The size comes from `ioctl(TIOCGWINSZ)`, which is not POSIX (Linux
+  man-pages `TIOCGWINSZ(2const)`; the macOS SDK's `sys/ttycom.h`).
+  POSIX Issue 8's `tcgetwinsize` is the standard form, but the macOS SDK
+  does not declare it.
+- A write that accepts zero bytes for a non-zero request is a failure, on
+  both platforms, so the loop cannot spin. Each call asks for at most
+  `SSIZE_MAX` (POSIX) or `MAXDWORD` (Windows) bytes.
+- R10's "Windows with VT enabled" comes from
+  `ovd_platform_virtual_terminal`: true only if the Windows output-mode
+  step is recorded. Detection stays platform-independent.
+- INFERRED, not stated by Microsoft: `GetConsoleMode` fails for a
+  redirected handle (the "is a terminal" test), and `srWindow`'s corners
+  are inclusive (size = difference + 1). Both are on the OVD-12 manual
+  checklist.
