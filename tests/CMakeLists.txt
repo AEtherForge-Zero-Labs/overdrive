@@ -132,3 +132,8 @@ ovd_add_test(test_alloc)
 # Shared builds hide internal symbols, so the test compiles the modules it tests.
 target_sources(test_alloc PRIVATE support/test_alloc.c
     "${PROJECT_SOURCE_DIR}/src/alloc.c" "${PROJECT_SOURCE_DIR}/src/output.c")
+ovd_add_test(test_unicode)
+# The iterator is hidden in the shared library, so the test compiles it in.
+target_sources(test_unicode PRIVATE "${PROJECT_SOURCE_DIR}/src/unicode.c")
+target_include_directories(test_unicode PRIVATE "${PROJECT_BINARY_DIR}/generated")
+add_dependencies(test_unicode ovd_unicode_tables)
