@@ -1,5 +1,5 @@
 /*
- * Box drawing (FR-034; research.md R18, R44). Transformational over the
+ * Box drawing (FR-034; research.md R18, R45). Transformational over the
  * canvas: every border cell is drawn through ovd_canvas_text, so the
  * clip, the R20 repair, R22 normalization, and closed canvases behave
  * exactly as for text. Nothing here reads the canvas's fields.

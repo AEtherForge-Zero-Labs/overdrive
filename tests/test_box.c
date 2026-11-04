@@ -1,5 +1,5 @@
 /* Tests for src/box.c (T029): FR-034, User Story 3; research.md R18 to
- * R20, R22, R23, R44. The canvas is opened directly on a buffer, as in
+ * R20, R22, R23, R45. The canvas is opened directly on a buffer, as in
  * test_canvas.c. Every cell starts as '.' in DOT, so a cell the box must
  * not touch reads back as '.'. */
 #include "alloc.h"

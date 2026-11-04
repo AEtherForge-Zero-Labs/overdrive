@@ -9,5 +9,5 @@
 ## 3. Delivery evidence
 
 - [x] 3.1 Run every preset, plus CC=gcc-14 and LLVM Clang 22, with zero warnings; `ctest --preset debug -R test_box` passes.
-- [x] 3.2 Record R44 in `research.md` and tick T029 and T030.
+- [x] 3.2 Record R45 in `research.md` and tick T029 and T030.
 - [x] 3.3 Reread the full diff and publish the PR with evidence.

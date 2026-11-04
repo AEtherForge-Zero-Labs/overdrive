@@ -176,3 +176,9 @@ add_dependencies(test_box ovd_unicode_tables)
 # canvas.c and box.c define OVD_API functions; a Windows shared build must
 # see them as dllexport, not dllimport.
 target_compile_definitions(test_box PRIVATE OVERDRIVE_BUILDING)
+ovd_add_test(test_terminal)
+# Public API only; the counting allocator is test support.
+target_sources(test_terminal PRIVATE support/test_alloc.c)
+# The headless backend must ignore these (R35).
+set_tests_properties(test_terminal PROPERTIES ENVIRONMENT_MODIFICATION
+    "NO_COLOR=set:1;COLORTERM=set:truecolor")

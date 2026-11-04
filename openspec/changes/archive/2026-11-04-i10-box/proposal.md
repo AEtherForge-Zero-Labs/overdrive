@@ -30,6 +30,6 @@ The change touches only:
 - the paths issue #10 owns;
 - append-only lines in the two CMake files;
 - the T029 and T030 ticks in `specs/001-render-core/tasks.md`;
-- one decision entry (R44) in `specs/001-render-core/research.md`.
+- one decision entry (R45) in `specs/001-render-core/research.md`.
 
 No public header changes.
