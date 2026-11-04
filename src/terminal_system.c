@@ -158,9 +158,9 @@ OvdResult ovd_terminal_system_enter(OvdTerminalSystem *system, int32_t rows)
     /* Part of the enter sequence may have reached the terminal, and the
      * failure does not show whether CSI ? 1049 h took effect, so the exit
      * sequence leaves the alternate screen whenever it was requested
-     * (R28). */
+     * (R28). The modes stay recorded: the caller frees step 6's blocks
+     * first, then undoes them, in reverse order. */
     write_exit(system, rows);
-    ovd_platform_leave(&system->modes);
     return OVD_ERROR_IO;
 }
 

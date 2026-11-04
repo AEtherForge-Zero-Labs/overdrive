@@ -30,7 +30,7 @@
  *
  * Invariants:
  * - modes records exactly the R28 steps 2 to 4 that open completed and no
- *   undo, enter failure, or close has reversed since;
+ *   undo or close has reversed since;
  * - alternate_screen is the config's, and the exit sequence leaves the
  *   alternate screen exactly when it is set.
  * Zero-initialized means nothing is recorded. */
@@ -55,14 +55,17 @@ typedef struct OvdTerminalSystem {
 [[nodiscard]] OvdColorDepth ovd_terminal_system_detect(const OvdTerminalSystem *system);
 
 /* Undoes R28 steps 4, 3, 2, writing nothing: create's rollback when a
- * step after open but before enter fails. */
+ * step after open fails (allocation, or enter after its blocks are
+ * freed). */
 void ovd_terminal_system_undo(OvdTerminalSystem *system);
 
 /* R28 step 7: writes the enter sequence in one write. On failure, part of
  * it may have reached the terminal, so the exit sequence is written
  * best-effort, leaving the alternate screen whenever it was requested and
- * moving to the last of `rows` otherwise; steps 4, 3, 2 are undone; and
- * the result is OVD_ERROR_IO. rows is the size read at create. */
+ * moving to the last of `rows` otherwise, and the result is
+ * OVD_ERROR_IO. The modes stay recorded, so the caller can free step 6's
+ * blocks and then call undo: every step undone in reverse order. rows is
+ * the size read at create. */
 [[nodiscard]] OvdResult ovd_terminal_system_enter(OvdTerminalSystem *system, int32_t rows);
 
 /* Destroy's restore (R26, R28): the exit sequence in one write, then

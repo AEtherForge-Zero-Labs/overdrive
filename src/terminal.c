@@ -157,13 +157,15 @@ OVD_API OvdResult ovd_terminal_create(const OvdTerminalConfig *config, OvdTermin
     };
     adopt_storage(t, &blocks[1], size);
 
-    /* Step 7. On failure the enter has already written the exit sequence
-     * and undone steps 4, 3, 2 (R28); only the blocks remain. */
+    /* Step 7. On failure the enter has written the exit sequence (R28);
+     * then step 6 is undone, then steps 4, 3, 2, in reverse order. The
+     * modes live in t, so they are copied out before it is freed. */
     if (t->backend == OVD_BACKEND_SYSTEM) {
         result = ovd_terminal_system_enter(&t->system, size.rows);
         if (result != OVD_OK) {
+            system = t->system;
             free_terminal(t);
-            return result;
+            return undo_open(OVD_BACKEND_SYSTEM, &system, result);
         }
     }
     *out = t;

@@ -60,7 +60,8 @@ R25 to R29. No public header changes.
   - `enter`: step 7, the enter sequence in one write. If the write
     fails, `enter` writes the exit sequence best-effort (alternate
     screen counted as entered whenever requested, cursor row from the
-    size read at create), undoes 4, 3, 2, and returns `OVD_ERROR_IO`.
+    size read at create) and returns `OVD_ERROR_IO`, leaving the modes
+    recorded so create can undo in reverse order.
   - `close`: destroy's exit sequence in one write, then 4, 3, 2.
     Every step is attempted; nothing is reported.
   - `size` and `write`: the per-frame read and the frame write.
@@ -78,7 +79,8 @@ R25 to R29. No public header changes.
   - Create runs R28 in order: system `open`, then depth (detected or
     configured), then the requests and one allocation batch (on
     failure, `undo`), then system `enter`. If `enter` fails, the blocks
-    are freed and create returns `OVD_ERROR_IO`. `*out` is written only
+    are freed (step 6), then `undo` restores 4, 3, 2, and create returns
+    `OVD_ERROR_IO`. `*out` is written only
     on success.
   - Destroy abandons the frame, then calls `close` with the last
     frame's rows, then frees.
