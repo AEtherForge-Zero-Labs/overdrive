@@ -702,3 +702,32 @@ Each takes the narrowest reading (issue #11, labeled `assumption`).
 - **The grids swap only on delivery.** After a delivered frame, the frame
   grid becomes the screen. After `OVD_ERROR_IO` the screen is unknown, so
   which grid holds it no longer matters.
+
+### Boxes (OVD-09)
+
+**R45 — Box choices.** FR-034 and the `ovd_canvas_box` comment leave
+these open. Each takes the narrowest reading (issue #10, labeled
+`assumption`).
+- The glyphs are the code points render.h's comments show:
+
+  | Border | Corners | Horizontal | Vertical |
+  | --- | --- | --- | --- |
+  | light | U+250C U+2510 U+2514 U+2518 | U+2500 | U+2502 |
+  | heavy | U+250F U+2513 U+2517 U+251B | U+2501 | U+2503 |
+  | double | U+2554 U+2557 U+255A U+255D | U+2550 | U+2551 |
+  | rounded | U+256D U+256E U+2570 U+256F | U+2500 | U+2502 |
+  | ascii | `+` | `-` | `\|` |
+
+  Each is East Asian Width A or Na, so it takes one column (R5).
+- The "narrower or shorter than 2 cells" test uses the area itself, not
+  what the clip or the canvas leaves of it. A clipped box still draws
+  its visible part.
+- A 2-wide box has no horizontal edge cells, and a 2-tall box has no
+  vertical ones. A 2×2 box is its four corners.
+- Every border cell is written through `ovd_canvas_text`, the public
+  path. So the clip, R20's repair, R22's normalization, and R23's closed
+  canvas apply to boxes exactly as they do to text. `src/box.c` never
+  touches the canvas's fields.
+- Edges are computed in 64 bits (R18). Each edge is drawn only over its
+  part on the canvas, so the cost is bounded by the canvas size, not the
+  area size. Only on-canvas coordinates are converted to `int32_t`.

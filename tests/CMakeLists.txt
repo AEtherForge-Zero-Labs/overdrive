@@ -165,6 +165,17 @@ target_sources(test_diff PRIVATE support/test_alloc.c
     "${PROJECT_SOURCE_DIR}/src/output.c" "${PROJECT_SOURCE_DIR}/src/color.c"
     "${PROJECT_SOURCE_DIR}/src/diff.c")
 target_link_libraries(test_diff PRIVATE overdrive_vt_replay)
+ovd_add_test(test_box)
+# The canvas internals are hidden in a shared build; compile them and box.c in.
+target_sources(test_box PRIVATE support/test_alloc.c
+    "${PROJECT_SOURCE_DIR}/src/alloc.c" "${PROJECT_SOURCE_DIR}/src/buffer.c"
+    "${PROJECT_SOURCE_DIR}/src/canvas.c" "${PROJECT_SOURCE_DIR}/src/unicode.c"
+    "${PROJECT_SOURCE_DIR}/src/box.c")
+target_include_directories(test_box PRIVATE "${PROJECT_BINARY_DIR}/generated")
+add_dependencies(test_box ovd_unicode_tables)
+# canvas.c and box.c define OVD_API functions; a Windows shared build must
+# see them as dllexport, not dllimport.
+target_compile_definitions(test_box PRIVATE OVERDRIVE_BUILDING)
 ovd_add_test(test_terminal)
 # Public API only; the counting allocator is test support.
 target_sources(test_terminal PRIVATE support/test_alloc.c)
