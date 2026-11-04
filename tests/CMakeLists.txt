@@ -210,3 +210,7 @@ endif()
 ")
 add_test(NAME test_system_notty COMMAND "${CMAKE_COMMAND}"
     -P "${CMAKE_CURRENT_BINARY_DIR}/test_system_notty.cmake")
+# Steady-state allocations (T035, SC-004). Public API only; the counting
+# allocator is test support.
+ovd_add_test(test_steady_state)
+target_sources(test_steady_state PRIVATE support/test_alloc.c)
