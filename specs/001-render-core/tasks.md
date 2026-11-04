@@ -60,8 +60,8 @@ Every behavior task is preceded by its test task, which must be seen failing.
 - [x] T028 [US1] Implement `src/diff.h`/`src/diff.c` (R8)
 
 ### OVD-09 Boxes [P] (depends on OVD-07)
-- [ ] T029 [P] [US3] Write `tests/test_box.c`: five border styles, clip, small rects draw nothing, interior untouched
-- [ ] T030 [P] [US3] Implement `src/box.c` (`ovd_canvas_box`)
+- [x] T029 [P] [US3] Write `tests/test_box.c`: five border styles, clip, small rects draw nothing, interior untouched
+- [x] T030 [P] [US3] Implement `src/box.c` (`ovd_canvas_box`)
 
 ## Phase 4 — Terminal and frames
 
