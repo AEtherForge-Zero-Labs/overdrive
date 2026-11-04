@@ -669,3 +669,36 @@ takes the narrowest reading (issue #9, labeled `assumption`).
   passed through, as `ovd_color_downsample` does.
 - The diff sends cell text as stored. Keeping control bytes out of the
   grid is the canvas's job (R17, FR-032).
+
+### Terminal and frames (OVD-10)
+
+**R44 — Terminal choices.** R21–R25, R31, and R35 leave these open.
+Each takes the narrowest reading (issue #11, labeled `assumption`).
+- **The system backend waits for OVD-11.** `ovd_terminal_create`
+  validates a system config fully, including `color_depth`, then returns
+  `OVD_ERROR_UNSUPPORTED` (Art. V, headless first). OVD-11 owns only
+  `src/terminal_system.c`, and calls into it from `terminal.c` would not
+  link before it exists. So OVD-11 must change the system branch in
+  `terminal.c` and add its fields to `struct OvdTerminal` in
+  `src/internal.h` (noted on #12).
+  *Rejected:* a stub in #12's file; a backend function-pointer table
+  (Art. VII).
+- **The default backend is `OVD_BACKEND_SYSTEM`.** That is also what a
+  zero-initialized config gives. terminal.h and R35 state every other
+  default.
+- **Errors are checked in a fixed order:** argument errors
+  (`OVD_ERROR_INVALID_ARGUMENT`) first, then the backend
+  (`OVD_ERROR_UNSUPPORTED`), then state (`OVD_ERROR_STATE`). A call with
+  several faults reports the first.
+- **One batch at create.** Create allocates the terminal, two grids, and
+  the output (sized by `ovd_diff_bound`) in one `ovd_alloc_all` batch,
+  so a refusal at any step leaves nothing behind. A resize allocates the
+  two grids and the output in one batch, then each owner adopts its
+  block (R31).
+- **A same-size pending size is a no-op.** A pending size equal to the
+  current one is cleared by the next begin with no allocation and no
+  full redraw. Only a change in size counts as a resize.
+- **A nullptr sink discards output.** The frame counts as delivered.
+- **The grids swap only on delivery.** After a delivered frame, the frame
+  grid becomes the screen. After `OVD_ERROR_IO` the screen is unknown, so
+  which grid holds it no longer matters.
