@@ -70,8 +70,8 @@ Every behavior task is preceded by its test task, which must be seen failing.
 - [x] T032 [US1] Implement `src/terminal.c` and `src/internal.h` (headless backend, frame begin/end/abandon, one write per frame, optional sync markers)
 
 ### OVD-11 System backend (depends on OVD-06, OVD-10)
-- [ ] T033 [US2] Implement the system backend in `src/terminal_system.c` via `platform.h` (called from `src/terminal.c` through `src/internal.h`): enter/leave order (FR-011), size re-read per frame (FR-014), `OVD_ERROR_NOT_A_TERMINAL` with nothing written, rollback on failure, best-effort restore, exit sequence per R26
-- [ ] T034 [US2] Add a non-interactive test: stdout redirected → `OVD_ERROR_NOT_A_TERMINAL`, output file empty (`tests/test_system_notty.c`)
+- [x] T033 [US2] Implement the system backend in `src/terminal_system.c` via `platform.h` (called from `src/terminal.c` through `src/internal.h`): enter/leave order (FR-011), size re-read per frame (FR-014), `OVD_ERROR_NOT_A_TERMINAL` with nothing written, rollback on failure, best-effort restore, exit sequence per R26
+- [x] T034 [US2] Add a non-interactive test: stdout redirected → `OVD_ERROR_NOT_A_TERMINAL`, output file empty (`tests/test_system_notty.c`)
 
 ### OVD-13 Benchmark and steady-state allocations [P] (depends on OVD-10)
 - [ ] T035 [P] [US4] Write `tests/test_alloc.c` (part 2) → separate file `tests/test_steady_state.c`: 100 frames after the first make 0 allocator calls (SC-004)

@@ -182,3 +182,31 @@ target_sources(test_terminal PRIVATE support/test_alloc.c)
 # The headless backend must ignore these (R35).
 set_tests_properties(test_terminal PROPERTIES ENVIRONMENT_MODIFICATION
     "NO_COLOR=set:1;COLORTERM=set:truecolor")
+# The system backend with stdout redirected (T034). Public API only. The
+# test is the driver below: it runs the program with stdout sent to a file,
+# through the cross emulator when there is one, and fails unless the
+# program exits 0 and the file is empty (R28 step 1: nothing written).
+add_executable(test_system_notty test_system_notty.c support/test_alloc.c)
+target_link_libraries(test_system_notty PRIVATE overdrive::overdrive)
+target_include_directories(test_system_notty PRIVATE "${PROJECT_SOURCE_DIR}/src")
+ovd_target_warnings(test_system_notty)
+file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/test_system_notty.cmake" CONTENT "
+set(output \"${CMAKE_CURRENT_BINARY_DIR}/test_system_notty.out\")
+file(REMOVE \"\${output}\")
+execute_process(COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} \"$<TARGET_FILE:test_system_notty>\"
+    OUTPUT_FILE \"\${output}\" ERROR_VARIABLE error RESULT_VARIABLE result)
+message(\"\${error}\")
+if(NOT result STREQUAL \"0\")
+    message(FATAL_ERROR \"test_system_notty exited with \${result}\")
+endif()
+if(NOT EXISTS \"\${output}\")
+    message(FATAL_ERROR \"The redirected stdout file was not created\")
+endif()
+file(SIZE \"\${output}\" size)
+if(NOT size EQUAL 0)
+    file(READ \"\${output}\" bytes HEX)
+    message(FATAL_ERROR \"\${size} bytes reached stdout: \${bytes}\")
+endif()
+")
+add_test(NAME test_system_notty COMMAND "${CMAKE_COMMAND}"
+    -P "${CMAKE_CURRENT_BINARY_DIR}/test_system_notty.cmake")
