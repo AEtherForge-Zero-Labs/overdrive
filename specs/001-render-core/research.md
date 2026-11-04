@@ -708,6 +708,11 @@ Each takes the narrowest reading (issue #11, labeled `assumption`).
 **R46 — System backend choices.** R25–R29 leave these open. Each takes
 the narrowest reading (issue #12, labeled `assumption`). R45 is the box
 entry from OVD-09.
+- **This replaces R44's first bullet** ("The system backend waits for
+  OVD-11"). `ovd_terminal_create` no longer returns
+  `OVD_ERROR_UNSUPPORTED` for a valid system config; it runs R28.
+  `ovd_terminal_set_size` still returns it for the system backend, and
+  R44's check order still holds.
 - **"The last frame" (R26) is the last frame passed to
   `ovd_frame_end`,** whatever the outcome. The frame ended, and some of
   its bytes may have reached the screen. Until a frame ends, destroy
