@@ -156,3 +156,9 @@ target_sources(overdrive PRIVATE src/terminal.c)
 
 # System backend (OVD-11), through the platform layer.
 target_sources(overdrive PRIVATE src/terminal_system.c)
+
+# Render benchmark (OVD-13, US4): off unless the bench preset turns it on.
+option(OVERDRIVE_BUILD_BENCHMARKS "Build Overdrive's benchmarks" OFF)
+if(OVERDRIVE_BUILD_BENCHMARKS)
+    add_subdirectory(bench)
+endif()

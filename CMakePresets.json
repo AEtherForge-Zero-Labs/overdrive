@@ -49,6 +49,15 @@
       "name": "windows-cross-shared",
       "inherits": "windows-cross-debug",
       "cacheVariables": { "BUILD_SHARED_LIBS": true }
+    },
+    {
+      "name": "bench",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "OVERDRIVE_BUILD_TESTS": false,
+        "OVERDRIVE_BUILD_BENCHMARKS": true
+      }
     }
   ],
   "buildPresets": [
@@ -57,7 +66,8 @@
     { "name": "debug-clang", "configurePreset": "debug-clang" },
     { "name": "shared", "configurePreset": "shared" },
     { "name": "windows-cross-debug", "configurePreset": "windows-cross-debug" },
-    { "name": "windows-cross-shared", "configurePreset": "windows-cross-shared" }
+    { "name": "windows-cross-shared", "configurePreset": "windows-cross-shared" },
+    { "name": "bench", "configurePreset": "bench" }
   ],
   "testPresets": [
     {
