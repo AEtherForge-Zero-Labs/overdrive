@@ -702,3 +702,42 @@ Each takes the narrowest reading (issue #11, labeled `assumption`).
 - **The grids swap only on delivery.** After a delivered frame, the frame
   grid becomes the screen. After `OVD_ERROR_IO` the screen is unknown, so
   which grid holds it no longer matters.
+
+### System backend (OVD-11)
+
+**R46 — System backend choices.** R25–R29 leave these open. Each takes
+the narrowest reading (issue #12, labeled `assumption`). R45 is the box
+entry from OVD-09.
+- **"The last frame" (R26) is the last frame passed to
+  `ovd_frame_end`,** whatever the outcome. The frame ended, and some of
+  its bytes may have reached the screen. Until a frame ends, destroy
+  uses the size read at create. An abandoned frame does not count.
+- **A system begin resizes only when the size it reads differs** from
+  the current buffers. An equal size neither allocates nor forces a full
+  redraw. A failed begin, whether the size read fails (R25) or an
+  allocation is refused, changes no size: `ovd_terminal_size` keeps
+  returning the current one. The system backend has no pending size.
+- **Color detection runs once, at create,** after R28 step 4, because
+  the Windows VT flag (R10) is known only then. It is not repeated per
+  frame.
+- **The exit sequence's cursor move is `CSI <rows> ; 1 H`,** the same
+  form the diff uses for cursor moves (R43).
+- **A failed write in `ovd_frame_end` is `OVD_ERROR_IO`** with the
+  screen unknown, as a sink failure is (R44). Part of the frame may have
+  reached the terminal, so the next frame is a full redraw.
+- **`terminal_system.c` is the only terminal file that calls
+  `platform.h`.** It owns `OvdTerminalSystem` (the modes recorded at
+  create, plus whether the alternate screen was requested), which is
+  embedded in `struct OvdTerminal` like `OvdOutput` (R39).
+  *Rejected:* a backend function-pointer table (Art. VII).
+- **The non-interactive test (T034) redirects stdout outside the
+  program.** A CMake driver runs it with `OUTPUT_FILE`, through the cross
+  emulator when one is set, and requires an empty file.
+  *Rejected:* `freopen` inside the program. Whether it rebinds
+  descriptor 1 on POSIX and the Win32 standard handle on Windows is
+  ASSUMED, not documented.
+- **MinGW and function addresses.** Passing the address of the external
+  `ovd_platform_environment` makes x86_64 MinGW GCC emit a global
+  `.refptr.ovd_platform_environment` symbol. The R12 prefix check on the
+  static archive rejects that symbol (observed in `windows-cross-debug`).
+  The detector therefore gets a file-local wrapper's address instead.

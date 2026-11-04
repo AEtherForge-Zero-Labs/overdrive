@@ -221,16 +221,14 @@ static bool test_create_validation(void)
     broken.release = nullptr;
     CHECK(rejects(&c, OVD_ERROR_INVALID_ARGUMENT, &f.alloc));
 
-    /* The system backend: the config is validated (color_depth even though
-     * detection would override it), then declined until OVD-11 (R44). Its
-     * headless_size is not validated. */
+    /* The system backend's config is validated too (color_depth even
+     * though detection would override it). A valid one would acquire the
+     * real terminal, so it is tested only with stdout redirected
+     * (test_system_notty). */
     c = f.config;
     c.backend = OVD_BACKEND_SYSTEM;
     c.color_depth = (OvdColorDepth)200;
     CHECK(rejects(&c, OVD_ERROR_INVALID_ARGUMENT, &f.alloc));
-    c.color_depth = OVD_COLOR_DEPTH_256;
-    c.headless_size = (OvdSize){ 0, 0 };
-    CHECK(rejects(&c, OVD_ERROR_UNSUPPORTED, &f.alloc));
 
     /* A size whose buffers overflow is OVD_ERROR_ALLOCATION, with no
      * allocator call. */

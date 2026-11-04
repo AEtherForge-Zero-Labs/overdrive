@@ -1,7 +1,8 @@
-/* The terminal and frame API (terminal.h, render.h), headless backend.
- * Owning module of struct OvdTerminal (internal.h). Composes the
- * allocator, the grid and canvas, the output buffer, and the diff.
- * research.md R21 to R25, R31, R35, R44. */
+/* The terminal and frame API (terminal.h, render.h). Owning module of
+ * struct OvdTerminal (internal.h). Composes the allocator, the grid and
+ * canvas, the output buffer, and the diff. The system backend's
+ * operating-system work is terminal_system.c's; this file calls it where
+ * the backend matters. research.md R21 to R28, R31, R35, R44, R46. */
 #include "internal.h"
 
 #include "diff.h"
@@ -60,6 +61,28 @@ static OvdBuffer *frame_grid(OvdTerminal *t)
     return &t->grids[1 - t->screen];
 }
 
+/* Releases every block the terminal owns, the struct's own last. */
+static void free_terminal(OvdTerminal *t)
+{
+    ovd_buffer_release(&t->grids[0], &t->allocator);
+    ovd_buffer_release(&t->grids[1], &t->allocator);
+    ovd_output_release(&t->output, &t->allocator);
+    /* The struct lives in self: copy what releasing it needs first. */
+    const OvdAllocator allocator = t->allocator;
+    OvdBlock self = t->self;
+    ovd_alloc_release(&allocator, &self);
+}
+
+/* Create's rollback before the terminal exists: undoes R28 steps 4, 3, 2
+ * for the system backend, then returns result. */
+static OvdResult undo_open(OvdBackend backend, OvdTerminalSystem *system, OvdResult result)
+{
+    if (backend == OVD_BACKEND_SYSTEM) {
+        ovd_terminal_system_undo(system);
+    }
+    return result;
+}
+
 OVD_API OvdTerminalConfig ovd_terminal_config_default(void)
 {
     return (OvdTerminalConfig){
@@ -89,22 +112,35 @@ OVD_API OvdResult ovd_terminal_create(const OvdTerminalConfig *config, OvdTermin
     if (config->backend == OVD_BACKEND_HEADLESS && !size_positive(config->headless_size)) {
         return OVD_ERROR_INVALID_ARGUMENT;
     }
-    /* The system backend arrives with OVD-11 (R44). */
-    if (config->backend != OVD_BACKEND_HEADLESS) {
-        return OVD_ERROR_UNSUPPORTED;
+
+    /* R28 steps 1 to 5 for the system backend, which then detects its
+     * depth unless told not to. Headless takes both from the config and
+     * never reads the environment (R35). */
+    OvdTerminalSystem system = {};
+    OvdSize size = config->headless_size;
+    OvdColorDepth depth = config->color_depth;
+    if (config->backend == OVD_BACKEND_SYSTEM) {
+        const OvdResult opened
+            = ovd_terminal_system_open(&system, config->alternate_screen, &size);
+        if (opened != OVD_OK) {
+            return opened;
+        }
+        if (config->detect_color_depth) {
+            depth = ovd_terminal_system_detect(&system);
+        }
     }
 
-    const OvdSize size = config->headless_size;
+    /* Step 6: one batch, so a refusal leaves nothing behind (R44). */
     OvdBlockRequest requests[1 + STORAGE_BLOCKS];
     requests[0] = (OvdBlockRequest){ .count = 1, .element_size = sizeof(OvdTerminal) };
     OvdResult result = storage_requests(size, config->synchronized_output, &requests[1]);
     if (result != OVD_OK) {
-        return result;
+        return undo_open(config->backend, &system, result);
     }
     OvdBlock blocks[1 + STORAGE_BLOCKS];
     result = ovd_alloc_all(&allocator, requests, 1 + STORAGE_BLOCKS, blocks);
     if (result != OVD_OK) {
-        return result;
+        return undo_open(config->backend, &system, result);
     }
 
     OvdTerminal *t = blocks[0].data;
@@ -112,12 +148,24 @@ OVD_API OvdResult ovd_terminal_create(const OvdTerminalConfig *config, OvdTermin
         .allocator = allocator,
         .self = blocks[0],
         .backend = config->backend,
-        .depth = config->color_depth, /* headless never detects (R35) */
+        .depth = depth,
         .synchronized = config->synchronized_output,
         .sink = config->sink,
         .sink_context = config->sink_context,
+        .last_rows = size.rows,
+        .system = system,
     };
     adopt_storage(t, &blocks[1], size);
+
+    /* Step 7. On failure the enter has already written the exit sequence
+     * and undone steps 4, 3, 2 (R28); only the blocks remain. */
+    if (t->backend == OVD_BACKEND_SYSTEM) {
+        result = ovd_terminal_system_enter(&t->system, size.rows);
+        if (result != OVD_OK) {
+            free_terminal(t);
+            return result;
+        }
+    }
     *out = t;
     return OVD_OK;
 }
@@ -127,14 +175,12 @@ OVD_API void ovd_terminal_destroy(OvdTerminal *terminal)
     if (terminal == nullptr) {
         return;
     }
+    /* R28: abandon, the exit sequence, steps 4, 3, 2, then free. */
     ovd_frame_abandon(terminal);
-    ovd_buffer_release(&terminal->grids[0], &terminal->allocator);
-    ovd_buffer_release(&terminal->grids[1], &terminal->allocator);
-    ovd_output_release(&terminal->output, &terminal->allocator);
-    /* The struct lives in self: copy what releasing it needs first. */
-    const OvdAllocator allocator = terminal->allocator;
-    OvdBlock self = terminal->self;
-    ovd_alloc_release(&allocator, &self);
+    if (terminal->backend == OVD_BACKEND_SYSTEM) {
+        ovd_terminal_system_close(&terminal->system, terminal->last_rows);
+    }
+    free_terminal(terminal);
 }
 
 OVD_API OvdSize ovd_terminal_size(const OvdTerminal *terminal)
@@ -182,25 +228,32 @@ OVD_API OvdResult ovd_frame_begin(OvdTerminal *terminal, OvdCanvas **out)
     if (terminal->frame_open || terminal->sink_running) {
         return OVD_ERROR_STATE;
     }
-    if (terminal->has_pending) {
-        if (!size_equal(terminal->pending, terminal->size)) {
-            /* Every new block before any old one is released (R31); a
-             * refusal changes nothing and keeps the size pending (R21). */
-            OvdBlockRequest requests[STORAGE_BLOCKS];
-            OvdResult result
-                = storage_requests(terminal->pending, terminal->synchronized, requests);
-            if (result != OVD_OK) {
-                return result;
-            }
-            OvdBlock blocks[STORAGE_BLOCKS];
-            result = ovd_alloc_all(&terminal->allocator, requests, STORAGE_BLOCKS, blocks);
-            if (result != OVD_OK) {
-                return result;
-            }
-            adopt_storage(terminal, blocks, terminal->pending);
+    /* The size this frame is drawn at: re-read from the terminal for the
+     * system backend (FR-014; 0 is OVD_ERROR_PLATFORM, R25), else the
+     * pending size if one is set. */
+    OvdSize target = terminal->has_pending ? terminal->pending : terminal->size;
+    if (terminal->backend == OVD_BACKEND_SYSTEM) {
+        const OvdResult read = ovd_terminal_system_size(&target);
+        if (read != OVD_OK) {
+            return read;
         }
-        terminal->has_pending = false;
     }
+    if (!size_equal(target, terminal->size)) {
+        /* Every new block before any old one is released (R31); a refusal
+         * changes nothing and keeps any pending size pending (R21). */
+        OvdBlockRequest requests[STORAGE_BLOCKS];
+        OvdResult result = storage_requests(target, terminal->synchronized, requests);
+        if (result != OVD_OK) {
+            return result;
+        }
+        OvdBlock blocks[STORAGE_BLOCKS];
+        result = ovd_alloc_all(&terminal->allocator, requests, STORAGE_BLOCKS, blocks);
+        if (result != OVD_OK) {
+            return result;
+        }
+        adopt_storage(terminal, blocks, target);
+    }
+    terminal->has_pending = false;
     ovd_canvas_open(&terminal->canvas, frame_grid(terminal));
     terminal->frame_open = true;
     *out = &terminal->canvas;
@@ -218,6 +271,9 @@ OVD_API OvdResult ovd_frame_end(OvdTerminal *terminal)
     /* Closed before the sink runs, so calls from it see a closed canvas. */
     ovd_canvas_close(&terminal->canvas);
     terminal->frame_open = false;
+    /* This frame has ended, whatever follows: destroy's cursor move uses
+     * its rows (R26, R46). */
+    terminal->last_rows = terminal->size.rows;
 
     ovd_output_reset(&terminal->output);
     const OvdBuffer *screen = terminal->screen_known ? &terminal->grids[terminal->screen]
@@ -231,11 +287,18 @@ OVD_API OvdResult ovd_frame_end(OvdTerminal *terminal)
         return OVD_ERROR_IO;
     }
     const size_t length = ovd_output_length(&terminal->output);
-    if (length > 0 && terminal->sink != nullptr) {
-        terminal->sink_running = true;
-        const bool delivered
-            = terminal->sink(terminal->sink_context, ovd_output_bytes(&terminal->output), length);
-        terminal->sink_running = false;
+    if (length > 0) {
+        /* One write (FR-022): stdout for the system backend, else the
+         * sink, where a nullptr sink discards the frame (R44). */
+        const char *bytes = ovd_output_bytes(&terminal->output);
+        bool delivered = true;
+        if (terminal->backend == OVD_BACKEND_SYSTEM) {
+            delivered = ovd_terminal_system_write(bytes, length);
+        } else if (terminal->sink != nullptr) {
+            terminal->sink_running = true;
+            delivered = terminal->sink(terminal->sink_context, bytes, length);
+            terminal->sink_running = false;
+        }
         if (!delivered) {
             terminal->screen_known = false;
             return OVD_ERROR_IO;
