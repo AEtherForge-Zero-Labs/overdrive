@@ -165,3 +165,9 @@ target_sources(test_diff PRIVATE support/test_alloc.c
     "${PROJECT_SOURCE_DIR}/src/output.c" "${PROJECT_SOURCE_DIR}/src/color.c"
     "${PROJECT_SOURCE_DIR}/src/diff.c")
 target_link_libraries(test_diff PRIVATE overdrive_vt_replay)
+ovd_add_test(test_terminal)
+# Public API only; the counting allocator is test support.
+target_sources(test_terminal PRIVATE support/test_alloc.c)
+# The headless backend must ignore these (R35).
+set_tests_properties(test_terminal PROPERTIES ENVIRONMENT_MODIFICATION
+    "NO_COLOR=set:1;COLORTERM=set:truecolor")
