@@ -74,8 +74,8 @@ Every behavior task is preceded by its test task, which must be seen failing.
 - [x] T034 [US2] Add a non-interactive test: stdout redirected → `OVD_ERROR_NOT_A_TERMINAL`, output file empty (`tests/test_system_notty.c`)
 
 ### OVD-13 Benchmark and steady-state allocations [P] (depends on OVD-10)
-- [ ] T035 [P] [US4] Write `tests/test_alloc.c` (part 2) → separate file `tests/test_steady_state.c`: 100 frames after the first make 0 allocator calls (SC-004)
-- [ ] T036 [P] [US4] Write `bench/render_benchmark.c` + option `OVERDRIVE_BUILD_BENCHMARKS` + `bench` preset; prints scenarios, bytes/frame, timing, machine/compiler/build type (SC-003, SC-008)
+- [x] T035 [P] [US4] Write `tests/test_alloc.c` (part 2) → separate file `tests/test_steady_state.c`: 100 frames after the first make 0 allocator calls (SC-004)
+- [x] T036 [P] [US4] Write `bench/render_benchmark.c` + option `OVERDRIVE_BUILD_BENCHMARKS` + `bench` preset; prints scenarios, bytes/frame, timing, machine/compiler/build type (SC-003, SC-008)
 
 ## Phase 5 — Demonstration and documentation
 

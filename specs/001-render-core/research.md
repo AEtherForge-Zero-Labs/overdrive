@@ -775,3 +775,70 @@ entry from OVD-09.
   `.refptr.ovd_platform_environment` symbol. The R12 prefix check on the
   static archive rejects that symbol (observed in `windows-cross-debug`).
   The detector therefore gets a file-local wrapper's address instead.
+
+**R47 — Benchmark and steady-state choices.** US4, SC-003, SC-004, and
+SC-008 leave these open. Each takes the narrowest reading (issue #13,
+labeled `assumption`).
+- **The steady-state test (T035) counts both allocator functions.** It
+  runs through the public API with the counting allocator and checks
+  `allocate` and `release` calls. Two stretches must make none: the
+  first frame after create plus the 100 after it, and the 100 frames
+  after a resizing frame. The first frame counts too, because its size
+  equals create's buffers (SC-004). The frames draw random content from a
+  fixed seed: hostile text, extreme rects, every border and attribute
+  bit, and an out-of-range color kind. They also pass through each
+  frame state: full redraws, sink failures, abandoned frames, unchanged
+  frames, misuse calls, and a `set_size` to the current size. That is
+  done at three sizes, four depths, and synchronized output on and off.
+  The resizing frame must allocate, and the sink must see output, so
+  the test cannot pass vacuously.
+- **The benchmark is ISO C, timed with `timespec_get`.** It uses
+  `TIME_MONOTONIC` when `<time.h>` defines it (optional in C23) and it
+  works, else `TIME_UTC`. The output names the clock and the smallest
+  step observed between reads. The macOS SDK with AppleClang 21 and
+  MinGW-w64 define no `TIME_MONOTONIC` (observed). A sample that goes
+  backwards fails the run.
+  *Rejected:* `clock_gettime` and `QueryPerformanceCounter`, which need
+  OS headers outside `src/platform/`; and `clock()`, which measures
+  processor time and varies by C library.
+- **Only `ovd_frame_end` is timed (SC-008), per frame,** including the
+  headless sink, which only records the length. The headless backend
+  does no I/O, so no number here describes a real terminal's speed.
+  Median and p99 are by nearest rank; each scenario runs one untimed
+  setup frame first.
+- **Scenarios run on a headless 200×60 truecolor terminal with
+  synchronized output off.** They use one representative screen: an RGB
+  background everywhere, a header row, a light box around the body,
+  log lines in alternating RGB foregrounds, and a status row.
+  - *Full redraw* invalidates before every frame.
+  - *One-cell change* flips one body cell each frame.
+  - *Scrolling region* shifts every log line by one.
+  - *No change* repeats the screen.
+  `bench/render_benchmark.c` is the authoritative definition.
+- **SC-003 is measured at its worst case.** That is the bottom-right
+  cell of a 999×999 terminal, which takes the longest cursor move. Both
+  colors are RGB with three-digit components, there are no attributes,
+  and the glyph is a 4-byte narrow U+1D400/U+1D401. The benchmark checks
+  that the cell really is width 1 and 4 bytes, and exits nonzero if the
+  bytes exceed 64.
+- **Build and machine facts come from CMake at configure time,** in a
+  generated header. The machine is labeled "configure host", because a
+  cross build runs elsewhere. Runtime queries would need OS headers.
+- **The `bench` preset is Release with tests off and is not in CI.**
+  `ci.yml` is OVD-01's, and shared runners give noisy timing.
+- **No SC-008 target is set here.** This is the first measurement.
+  The command was `cmake --preset bench`, then
+  `cmake --build --preset bench`, then the `render_benchmark` program it
+  builds, run with no argument (1000 frames per scenario). It ran on
+  2026-11-04 on an Apple M3 Pro (11 cores, 18 GiB, Darwin 27.2.0),
+  built Release with AppleClang 21.0.0 (`-O3 -DNDEBUG`). The clock was
+  `TIME_UTC`, with an observed step of 1 µs. Times are `ovd_frame_end`
+  in µs.
+
+  | Scenario | Size | Bytes/frame | Median | p99 |
+  |---|---|---|---|---|
+  | Full redraw | 200×60 | 16701 | 271 | 309 |
+  | One-cell change | 200×60 | 47 | 51 | 64 |
+  | Scrolling region | 200×60 | 5806–5866 | 128 | 155 |
+  | No change | 200×60 | 0 | 51 | 64 |
+  | SC-003 worst cell | 999×999 | 54 | 3919 | 5096 |
