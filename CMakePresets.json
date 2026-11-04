@@ -1,0 +1,84 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 28, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+        "OVERDRIVE_BUILD_TESTS": true,
+        "OVERDRIVE_BUILD_EXAMPLES": false,
+        "BUILD_SHARED_LIBS": false
+      }
+    },
+    {
+      "name": "debug",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "release",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "debug-clang",
+      "inherits": "debug",
+      "cacheVariables": { "CMAKE_C_COMPILER": "clang" }
+    },
+    {
+      "name": "shared",
+      "inherits": "debug",
+      "cacheVariables": { "BUILD_SHARED_LIBS": true }
+    },
+    {
+      "name": "windows-cross-debug",
+      "inherits": "debug",
+      "cacheVariables": {
+        "CMAKE_SYSTEM_NAME": "Windows",
+        "CMAKE_SYSTEM_PROCESSOR": "AMD64",
+        "CMAKE_C_COMPILER": "x86_64-w64-mingw32-gcc",
+        "CMAKE_CROSSCOMPILING_EMULATOR": "wine",
+        "CMAKE_FIND_ROOT_PATH_MODE_PROGRAM": "NEVER"
+      }
+    },
+    {
+      "name": "windows-cross-shared",
+      "inherits": "windows-cross-debug",
+      "cacheVariables": { "BUILD_SHARED_LIBS": true }
+    }
+  ],
+  "buildPresets": [
+    { "name": "debug", "configurePreset": "debug" },
+    { "name": "release", "configurePreset": "release" },
+    { "name": "debug-clang", "configurePreset": "debug-clang" },
+    { "name": "shared", "configurePreset": "shared" },
+    { "name": "windows-cross-debug", "configurePreset": "windows-cross-debug" },
+    { "name": "windows-cross-shared", "configurePreset": "windows-cross-shared" }
+  ],
+  "testPresets": [
+    {
+      "name": "test-base",
+      "hidden": true,
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "timeout": 60 }
+    },
+    { "name": "debug", "inherits": "test-base", "configurePreset": "debug" },
+    { "name": "release", "inherits": "test-base", "configurePreset": "release" },
+    { "name": "debug-clang", "inherits": "test-base", "configurePreset": "debug-clang" },
+    { "name": "shared", "inherits": "test-base", "configurePreset": "shared" },
+    {
+      "name": "windows-cross-debug",
+      "inherits": "test-base",
+      "configurePreset": "windows-cross-debug"
+    },
+    {
+      "name": "windows-cross-shared",
+      "inherits": "test-base",
+      "configurePreset": "windows-cross-shared"
+    }
+  ]
+}
