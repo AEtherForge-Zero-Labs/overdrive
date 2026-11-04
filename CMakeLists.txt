@@ -153,3 +153,6 @@ target_sources(overdrive PRIVATE src/box.c)
 
 # Terminal and frame API, headless backend (OVD-10).
 target_sources(overdrive PRIVATE src/terminal.c)
+
+# System backend (OVD-11), through the platform layer.
+target_sources(overdrive PRIVATE src/terminal_system.c)
