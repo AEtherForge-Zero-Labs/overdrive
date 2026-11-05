@@ -2,7 +2,8 @@
  * struct OvdTerminal (internal.h). Composes the allocator, the grid and
  * canvas, the output buffer, and the diff. The system backend's
  * operating-system work is terminal_system.c's; this file calls it where
- * the backend matters. research.md R21 to R28, R31, R35, R44, R46. */
+ * the backend matters; input.c holds the input functions. research.md
+ * R21 to R28, R31, R35, R44, R46, R114. */
 #include "internal.h"
 
 #include "diff.h"
@@ -12,6 +13,10 @@
 
 /* The blocks one size needs, in the order adopt takes them. */
 static constexpr size_t STORAGE_BLOCKS = 3;
+
+/* The blocks input adds at create: the queue, then the paste chunk
+ * buffer (R114, design D5). */
+static constexpr size_t INPUT_BLOCKS = 2;
 
 static bool size_positive(OvdSize size)
 {
@@ -67,6 +72,7 @@ static void free_terminal(OvdTerminal *t)
     ovd_buffer_release(&t->grids[0], &t->allocator);
     ovd_buffer_release(&t->grids[1], &t->allocator);
     ovd_output_release(&t->output, &t->allocator);
+    ovd_input_release(&t->input, &t->allocator);
     /* The struct lives in self: copy what releasing it needs first. */
     const OvdAllocator allocator = t->allocator;
     OvdBlock self = t->self;
@@ -135,9 +141,8 @@ OVD_API OvdResult ovd_terminal_create(const OvdTerminalConfig *config, OvdTermin
         return OVD_ERROR_INVALID_ARGUMENT;
     }
     /* Interim, after every argument check and before anything is acquired:
-     * input is not implemented yet on either backend. OVD-17 removes this
-     * for the headless backend, OVD-18 for the system backend. */
-    if (config->input) {
+     * the system backend does not read input yet (T103). */
+    if (config->input && config->backend == OVD_BACKEND_SYSTEM) {
         return OVD_ERROR_UNSUPPORTED;
     }
 
@@ -158,15 +163,22 @@ OVD_API OvdResult ovd_terminal_create(const OvdTerminalConfig *config, OvdTermin
         }
     }
 
-    /* Step 6: one batch, so a refusal leaves nothing behind (R44). */
-    OvdBlockRequest requests[1 + STORAGE_BLOCKS];
+    /* Step 6: one batch, so a refusal leaves nothing behind (R44). With
+     * input on, the input queue and paste buffer are in it (R114). */
+    constexpr size_t INPUT_FIRST = 1 + STORAGE_BLOCKS;
+    OvdBlockRequest requests[INPUT_FIRST + INPUT_BLOCKS];
     requests[0] = (OvdBlockRequest){ .count = 1, .element_size = sizeof(OvdTerminal) };
     OvdResult result = storage_requests(size, config->synchronized_output, &requests[1]);
     if (result != OVD_OK) {
         return undo_open(config->backend, &system, result);
     }
-    OvdBlock blocks[1 + STORAGE_BLOCKS];
-    result = ovd_alloc_all(&allocator, requests, 1 + STORAGE_BLOCKS, blocks);
+    requests[INPUT_FIRST] = (OvdBlockRequest){ .count = OVD_INPUT_QUEUE_SIZE,
+                                               .element_size = 1 };
+    requests[INPUT_FIRST + 1] = (OvdBlockRequest){ .count = OVD_INPUT_TEXT_SIZE,
+                                                   .element_size = 1 };
+    const size_t count = config->input ? INPUT_FIRST + INPUT_BLOCKS : INPUT_FIRST;
+    OvdBlock blocks[INPUT_FIRST + INPUT_BLOCKS] = {};
+    result = ovd_alloc_all(&allocator, requests, count, blocks);
     if (result != OVD_OK) {
         return undo_open(config->backend, &system, result);
     }
@@ -182,8 +194,18 @@ OVD_API OvdResult ovd_terminal_create(const OvdTerminalConfig *config, OvdTermin
         .sink_context = config->sink_context,
         .last_rows = size.rows,
         .system = system,
+        .input_on = config->input,
     };
     adopt_storage(t, &blocks[1], size);
+    /* input_config_valid bounds the delay to [0, 1000]. The adopt cannot
+     * fail with the sizes requested; if it did, the blocks are freed. */
+    if (config->input
+        && !ovd_input_adopt(&t->input, blocks[INPUT_FIRST], blocks[INPUT_FIRST + 1],
+                            (uint32_t)config->escape_delay_ms)) {
+        system = t->system;
+        free_terminal(t);
+        return undo_open(config->backend, &system, OVD_ERROR_ALLOCATION);
+    }
 
     /* Step 7. On failure the enter has written the exit sequence (R28);
      * then step 6 is undone, then steps 4, 3, 2, in reverse order. The
@@ -239,6 +261,10 @@ OVD_API OvdResult ovd_terminal_set_size(OvdTerminal *terminal, OvdSize size)
     }
     terminal->pending = size;
     terminal->has_pending = true;
+    /* Reported once by the next ovd_input_wait (R110, design D3). */
+    if (terminal->input_on) {
+        terminal->input.resize_unreported = true;
+    }
     return OVD_OK;
 }
 

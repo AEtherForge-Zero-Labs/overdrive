@@ -2,7 +2,8 @@
  * the terminal's current buffers make 0 allocator calls, whatever they
  * draw. Public API only, with the counting allocator. Each case checks
  * the first frame after create and the 100 after it, then a resize, then
- * the 100 frames after the resizing frame. research.md R30 to R32, R47. */
+ * the 100 frames after the resizing frame. With input on, 10^4 feed and
+ * wait calls make none either (T112). research.md R30 to R32, R47, R114. */
 #include "support/test_alloc.h"
 
 #include <overdrive/overdrive.h>
@@ -318,6 +319,85 @@ static bool run_case(OvdSize first, OvdSize second, OvdColorDepth depth, bool sy
     return ok && clean;
 }
 
+/* ---- Input (T112) ---------------------------------------------------- */
+
+constexpr int32_t INPUT_CALLS = 10000;
+
+/* Keys, mouse, focus, a paste, a lone ESC, a cut sequence, and ill-formed
+ * bytes: everything the decoder turns into events or discards. */
+static const struct {
+    const char *text;
+    size_t length;
+} input_pieces[] = {
+    TEXT("a"),
+    TEXT("\x1b[A"),
+    TEXT("\x1b[1;5C"),
+    TEXT("\x1b[<0;10;5M\x1b[<0;10;5m"),
+    TEXT("\x1b[<64;1;1M"),
+    TEXT("\x1b[I\x1b[O"),
+    TEXT("\x1b[200~pasted \x1b[31m text\x1b[201~"),
+    TEXT("\x1b"),
+    TEXT("\x1b[1;"),
+    TEXT("\xe4\xb8\xad\xff\xc2"),
+    TEXT("\x1b[99999999999999999999999~"),
+};
+
+/* 10^4 feed and wait calls, with resizes reported between them, make 0
+ * allocator calls: the queue and the paste buffer are create's (R114). */
+static bool run_input_case(void)
+{
+    Run r = { .random = 0x0D170002u };
+    test_alloc_init(&r.alloc);
+    r.allocator = test_alloc_allocator(&r.alloc);
+    OvdTerminalConfig config = ovd_terminal_config_default();
+    config.backend = OVD_BACKEND_HEADLESS;
+    config.headless_size = (OvdSize){ 80, 24 };
+    config.sink = sink;
+    config.sink_context = &r.sink;
+    config.allocator = &r.allocator;
+    config.input = true;
+    config.mouse = true;
+    config.bracketed_paste = true;
+    config.focus_events = true;
+
+    bool ok = ovd_terminal_create(&config, &r.terminal) == OVD_OK;
+    size_t events = 0;
+    const size_t allocations = r.alloc.allocate_calls;
+    const size_t releases = r.alloc.release_calls;
+    static const int32_t timeouts[] = { 0, 0, 0, 10, 50, OVD_WAIT_FOREVER };
+    for (int32_t n = 0; ok && n < INPUT_CALLS; n += 2) {
+        const size_t pick = next_random(&r.random) % (sizeof input_pieces / sizeof input_pieces[0]);
+        size_t accepted = 0;
+        ok = ovd_input_feed(r.terminal, input_pieces[pick].text, input_pieces[pick].length,
+                            &accepted)
+             == OVD_OK;
+        if (ok && n % 50 == 0) {
+            ok = ovd_terminal_set_size(r.terminal, (OvdSize){ 80, 24 }) == OVD_OK;
+        }
+        OvdEvent event = { .kind = OVD_EVENT_KIND_NONE };
+        const int32_t timeout = timeouts[next_random(&r.random) % 6];
+        ok = ok && ovd_input_wait(r.terminal, timeout, &event) == OVD_OK;
+        if (ok && event.kind != OVD_EVENT_KIND_NONE) {
+            ++events;
+        }
+        if (r.alloc.allocate_calls != allocations || r.alloc.release_calls != releases) {
+            fprintf(stderr, "  input call %d: %zu allocate and %zu release calls\n", n,
+                    r.alloc.allocate_calls - allocations, r.alloc.release_calls - releases);
+            ok = false;
+        }
+    }
+    if (r.terminal != nullptr) {
+        ovd_terminal_destroy(r.terminal);
+    }
+    const bool clean = r.alloc.live_blocks == 0 && r.alloc.violations == 0;
+    if (!ok || !clean || events == 0) {
+        fprintf(stderr, "  input case: ok %d, events %zu, live %zu, violations %zu\n", (int)ok,
+                events, r.alloc.live_blocks, r.alloc.violations);
+    }
+    test_alloc_release_all(&r.alloc);
+    return ok && clean && events > 0;
+}
+
 int main(void)
 {
     static const struct {
@@ -348,12 +428,17 @@ int main(void)
             }
         }
     }
+    ++cases;
+    if (!run_input_case()) {
+        ++failures;
+    }
     if (failures != 0) {
         fprintf(stderr, "steady_state: %d of %d case(s) failed\n", failures, cases);
         return EXIT_FAILURE;
     }
-    printf("steady_state: %d cases, 0 allocator calls in each case's %d frames at create's "
-           "size and %d after a resize\n",
-           cases, 1 + STEADY_FRAMES, STEADY_FRAMES);
+    printf("steady_state: %d cases, 0 allocator calls in each frame case's %d frames at "
+           "create's size and %d after a resize, and in the input case's %d feed and wait "
+           "calls\n",
+           cases, 1 + STEADY_FRAMES, STEADY_FRAMES, INPUT_CALLS);
     return EXIT_SUCCESS;
 }

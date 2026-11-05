@@ -165,3 +165,5 @@ endif()
 
 # Input decoder (OVD-16, R104).
 target_sources(overdrive PRIVATE src/decode.c)
+# Headless input: wait and feed over the decoder (OVD-17, R102, R109, R110).
+target_sources(overdrive PRIVATE src/input.c)
