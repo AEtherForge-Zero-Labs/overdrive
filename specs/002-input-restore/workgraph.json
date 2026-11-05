@@ -16,7 +16,7 @@
       "id": "OVD-15", "title": "Contract freeze for input and restoration, sanitizer preset",
       "phase": 0, "tasks": ["T101","T102","T103","T104"], "depends_on": [],
       "owns": ["include/overdrive/input.h","include/overdrive/terminal.h","include/overdrive/overdrive.h","src/terminal.c","tests/test_terminal.c","CMakePresets.json",".github/workflows/ci.yml",".specify/memory/baseline.md"],
-      "requirements": ["FR-001","FR-003","FR-013","FR-035","FR-040","SC-007"],
+      "requirements": ["FR-001","FR-003","FR-013","FR-035","FR-040","SC-002","SC-007"],
       "proof": ["cmake --preset debug","cmake --build --preset debug","ctest --preset debug","cmake --preset sanitize","cmake --build --preset sanitize","ctest --preset sanitize","cmake --preset windows-cross-debug","cmake --build --preset windows-cross-debug","ctest --preset windows-cross-debug"],
       "tier": "sonnet",
       "note": "owns the overdrive_public_headers line of CMakeLists.txt (not an append); contract freeze: include/overdrive/ changes after this need a contract-change issue; create with input on returns OVD_ERROR_UNSUPPORTED until OVD-17 (headless) and OVD-18 (system)"
@@ -33,7 +33,7 @@
       "id": "OVD-17", "title": "Headless input API: wait and feed",
       "phase": 2, "tasks": ["T110","T111","T112","T113"], "depends_on": ["OVD-16"],
       "owns": ["src/input.c","src/terminal.c","src/internal.h","tests/test_input.c","tests/test_steady_state.c"],
-      "requirements": ["FR-004","FR-010","FR-016","FR-017","FR-018","SC-004","SC-005"],
+      "requirements": ["FR-004","FR-010","FR-016","FR-017","FR-018","FR-035","SC-004","SC-005"],
       "proof": ["ctest --preset debug -R 'test_input|test_steady_state'","ctest --preset sanitize"],
       "tier": "opus"
     },

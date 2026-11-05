@@ -129,19 +129,24 @@ typedef struct OvdTerminalConfig {
     /* System backend only. Default true: until destroy, a crash or a
      * termination signal restores the terminal before the process ends
      * (POSIX SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGABRT, SIGSEGV, SIGBUS,
-     * SIGFPE, SIGILL; Windows console close, logoff, shutdown, Ctrl+Break,
-     * unhandled exceptions, and abort). This installs process-wide
-     * handlers, the one exception to Overdrive keeping no process-wide
-     * state. Handlers installed before create still run: for a
-     * termination signal the application already handles, Overdrive only
-     * calls that handler and restores nothing; signals ignored before
+     * SIGFPE, SIGILL; Windows console close, Ctrl+C while input is off,
+     * Ctrl+Break, unhandled exceptions, and abort). This installs
+     * process-wide handlers, the one exception to Overdrive keeping no
+     * process-wide state. Handlers installed before create still run: for
+     * a termination signal the application already handles (on Windows,
+     * Ctrl+C or Ctrl+Break with a C runtime signal handler), Overdrive
+     * only calls that handler and restores nothing; signals ignored before
      * create stay ignored. Destroy puts back the earlier handler of each
      * signal whose handler is still Overdrive's; one the application
      * installed after create stays, and disables restoration for that
      * signal meanwhile. Only the first system terminal that is alive
      * installs them. Not covered: uncatchable signals, a normal exit
-     * without destroy, and a signal delivered to another thread while
-     * create or destroy runs. Set false if the application manages these
+     * without destroy, a signal delivered to another thread while create
+     * or destroy runs, a fault raised inside create or destroy, and on
+     * Windows logoff and shutdown (only services receive them) and a
+     * console control handler registered directly before create (it runs
+     * after the restore). False installs none of these; input's SIGWINCH
+     * handler is separate. Set false if the application manages these
      * signals itself. */
     bool restore_on_exit;
 } OvdTerminalConfig;

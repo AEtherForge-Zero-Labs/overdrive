@@ -112,8 +112,10 @@ row into its test table):
 
 **R106 — Raw mode on POSIX.** Added as a new R28-style step after
 echo, read before change, restored in reverse: clear `ICANON`, `ISIG`,
-`IEXTEN` in `c_lflag`; clear `IXON` and `ICRNL` in `c_iflag` (so
-Ctrl+S, Ctrl+Q arrive and Enter is CR, distinct from Ctrl+J); set
+`IEXTEN` in `c_lflag`; clear `IXON`, `ICRNL`, `INLCR`, `IGNCR`, and
+`ISTRIP` in `c_iflag` (so Ctrl+S, Ctrl+Q arrive, Enter is CR, distinct
+from Ctrl+J, and bytes reach the decoder unchanged: no CR or LF mapped
+or dropped, no eighth bit stripped from UTF-8); set
 `VMIN` 0 and `VTIME` 0. `OPOST` is kept: output processing is not input
 (ASSUMED meanings, [POSIX] `termios.h`; the existing echo step already
 cites it). Read back after set, as the echo step does.
@@ -246,7 +248,14 @@ on a terminal already restored. Restoration therefore runs exactly once
 (FR-033) and is never interrupted half-way on the calling thread.
 *Not covered*, documented (spec FR-034): the same signal delivered to
 another thread between create's first mode change and `ARMED`, or
-during destroy after `IDLE`.
+during destroy after `IDLE`; and a synchronous fault (`SIGSEGV`,
+`SIGBUS`, `SIGFPE`, `SIGILL`) raised by create or destroy on the
+calling thread while the mask blocks it, whose result POSIX leaves
+undefined (ASSUMED [POSIX] `pthread_sigmask`: undefined unless the
+signal came from another process, `kill`, `pthread_kill`, `raise`, or
+`sigqueue`; T118 quotes it). The mask is kept because the alternative,
+leaving the fault signals unblocked, lets a fault inside destroy's
+restore reach a handler that spins on its own thread's `CLAIMED`.
 *Partial frame:* a handler can interrupt a frame's write in the middle
 of a control sequence, so the exit sequence starts with CAN (0x18),
 which cancels a sequence in progress (ASSUMED: ECMA-48 §8.3.6 and
@@ -260,11 +269,25 @@ end the process while destroy is half-way. `sigprocmask`: unspecified in
 a multi-threaded process ([POSIX] `sigprocmask`; ASSUMED wording).
 
 **R113 — Windows abnormal-exit restoration.** `SetConsoleCtrlHandler`
-for `CTRL_BREAK_EVENT`, `CTRL_CLOSE_EVENT`, `CTRL_LOGOFF_EVENT`,
-`CTRL_SHUTDOWN_EVENT`; the handler restores (write exit sequence,
-`SetConsoleMode` both handles, `SetConsoleOutputCP`) and returns FALSE
-so the next handler or the default runs (ASSUMED [MS-CTRL]: the handler
-runs on a new thread; returning FALSE passes the event on). Crashes:
+for `CTRL_C_EVENT`, `CTRL_BREAK_EVENT`, and `CTRL_CLOSE_EVENT`; the
+handler restores (write exit sequence, `SetConsoleMode` both handles,
+`SetConsoleOutputCP`) and returns FALSE so the next handler or the
+default runs (ASSUMED [MS-CTRL]: the handler runs on a new thread;
+handlers run last-registered first; returning FALSE passes the event
+on). `CTRL_C_EVENT` arrives only while input is off: with input on,
+`ENABLE_PROCESSED_INPUT` is clear and Ctrl+C is input (R107).
+Claim rule (spec FR-032): at create, Overdrive reads the C runtime's
+`SIGINT` and `SIGBREAK` dispositions (`signal` returns the previous one,
+which is put back at once; ASSUMED); for Ctrl+C or Ctrl+Break whose
+disposition was an application handler, Overdrive's handler restores
+nothing and returns FALSE, so the runtime's handler runs. A handler the
+application registered with `SetConsoleCtrlHandler` before create is
+invisible: it runs after Overdrive has restored (spec FR-034). A
+runtime handler installed after create registers after Overdrive's and
+runs first.
+`CTRL_LOGOFF_EVENT` and `CTRL_SHUTDOWN_EVENT` are not registered: only
+services receive them (ASSUMED [MS-CTRL] HandlerRoutine; spec FR-034).
+Crashes:
 `SetUnhandledExceptionFilter`, saving and chaining the previous filter,
 and the CRT `signal(SIGABRT, …)` for `abort` (ASSUMED). R112's record
 and state machine are shared: the console handler runs on its own

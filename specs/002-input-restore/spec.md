@@ -213,9 +213,11 @@ decoder exists.
 - stdin not a terminal with input enabled: create fails, nothing is
   changed (001's echo step is skipped in that case; enabling input is an
   explicit request, so it fails instead).
-- A signal arriving during create or destroy, on the thread calling
+- An asynchronous signal (one sent by another process, the terminal,
+  or `kill`) arriving during create or destroy, on the thread calling
   it: the terminal ends in a restored state, never half-changed. The
-  same signal delivered to another thread in that window is documented
+  same signal delivered to another thread in that window, and a
+  synchronous fault raised by create or destroy itself, are documented
   as not covered (FR-034).
 - A second signal arriving while restoration from the first runs:
   restoration is not run twice concurrently, and the process still ends.
@@ -284,9 +286,10 @@ decoder exists.
 - **FR-030**: When a system terminal exists, the process ending through
   a catchable termination or crash signal (POSIX: `SIGHUP`, `SIGINT`,
   `SIGQUIT`, `SIGTERM`, `SIGABRT`, `SIGSEGV`, `SIGBUS`, `SIGFPE`,
-  `SIGILL`), or on Windows through a console close, logoff, or shutdown
-  event, Ctrl+Break, or an unhandled exception, MUST restore the
-  terminal first. It applies whether or not input is enabled.
+  `SIGILL`), or on Windows through a console close event, Ctrl+C (only
+  while input is off; with input on it is a key), Ctrl+Break, or an
+  unhandled exception, MUST restore the terminal first. It applies
+  whether or not input is enabled.
 - **FR-031**: Abnormal-exit restoration MUST restore what destroy
   restores, using only operations that are safe at that point (POSIX
   async-signal-safe functions), and MUST then let the process end as it
@@ -300,17 +303,27 @@ decoder exists.
   application already handles, the application has claimed it:
   Overdrive calls its handler and restores nothing, since the
   application may keep running and call destroy itself. A signal that
-  was ignored before create stays ignored.
+  was ignored before create stays ignored. On Windows, Ctrl+C and
+  Ctrl+Break are termination signals for this rule, and a handler the
+  application installed through the C runtime's `signal` (`SIGINT`,
+  `SIGBREAK`) counts as handling them.
 - **FR-033**: Restoration MUST run at most once per terminal, whichever
   of destroy, a signal, or a crash comes first.
 - **FR-034**: What cannot be restored MUST be documented: uncatchable
   signals, power loss, the terminal emulator itself closing on POSIX
   after the process cannot write, modes another program changed, a
-  normal exit (`exit`, returning from `main`) without destroy, and a
-  signal delivered to another thread while create or destroy runs.
+  normal exit (`exit`, returning from `main`) without destroy, a
+  signal delivered to another thread while create or destroy runs, a
+  synchronous fault (`SIGSEGV`, `SIGBUS`, `SIGFPE`, `SIGILL`) raised on
+  the thread running create or destroy, and, on Windows, logoff and
+  shutdown events (only services receive them) and a console control
+  handler the application registered directly before create (it runs
+  after Overdrive has restored).
 - **FR-035**: Abnormal-exit restoration MUST be a create option of the
   system backend, on by default; turned off, create MUST install no
-  handler. The headless backend MUST never install one.
+  abnormal-exit handler. Input's `SIGWINCH` handler (FR-036) belongs to
+  input, not to restoration, and is installed whenever input is on. The
+  headless backend MUST never install any handler.
 - **FR-036**: Signal and console-control handlers, and the state they
   need, are process-wide. This is the one exception to 001 FR-002,
   limited to system terminals that have abnormal-exit restoration on or
