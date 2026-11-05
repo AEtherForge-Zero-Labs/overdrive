@@ -15,8 +15,10 @@
  * its final byte and discarded. */
 constexpr uint8_t OVD_DECODER_PARAMS_MAX = 64;
 
-/* The smallest paste chunk buffer: the most text one input byte can add
- * (a 5-byte end-marker prefix given back, then a U+FFFD). */
+/* The smallest paste chunk buffer. One decoding step adds at most 5
+ * bytes (a held end-marker prefix given back), and the room is checked
+ * again before the byte that ended it; 8 also covers a 4-byte scalar
+ * with margin. */
 constexpr size_t OVD_DECODER_TEXT_MIN = 8;
 
 /* The bytes of ESC [ 2 0 1 ~ less its last, held back in a paste (R103). */

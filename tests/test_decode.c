@@ -261,17 +261,14 @@ static bool decode_pieces(const char *in, size_t length, size_t cut, bool bytewi
     return true;
 }
 
-static void show(const char *in, size_t length, char *out, size_t capacity)
-{
-    Log log = { 0 };
-    put_text(&log, in, length);
-    snprintf(out, capacity, "%s", log.text);
-}
-
 static bool expect(const char *in, size_t length, const char *expected, int line)
 {
-    char shown[512];
-    show(in, length, shown, sizeof shown);
+    /* The input as readable text, bounded like any log (put refuses past
+     * the capacity). */
+    static Log shown_log;
+    memset(&shown_log, 0, sizeof shown_log);
+    put_text(&shown_log, in, length);
+    const char *shown = shown_log.text;
     Log log;
     for (size_t pass = 0; pass <= length + 1; ++pass) {
         /* pass 0: whole; 1..length-1: split there; length+1: bytewise */
@@ -499,6 +496,10 @@ static bool test_discarded(void)
         ROW("\x1bOX" "z", "key 'z'"),
         ROW("\x1bO1" "z", "key '1', key 'z'"), /* SS3 takes only a final byte: 1 ends it */
         ROW("\x1b[1;5", ""),                    /* unfinished, delay passes */
+        ROW("\x1b[1", ""),                      /* one parameter byte: not Alt+[ */
+        ROW("\x1b[ ", ""),                      /* an intermediate alone: not Alt+[ */
+        ROW("\x1b[ A" "z", "key 'z'"),          /* intermediate before a known final */
+        ROW("\x1b[1;5 C" "z", "key 'z'"),
         /* a byte outside the CSI grammar ends it and is decoded afresh */
         ROW("\x1b[1\x01", "key 'a' +ctrl"),
         ROW("\x1b[1;5\x1b[B", "key Down"),
