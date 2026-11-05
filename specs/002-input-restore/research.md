@@ -395,6 +395,42 @@ the archived change `openspec/changes/archive/2026-11-05-i54-headless-input/`
 - The queue is linear and compacted by feed. The paste chunk buffer is
   3 × the queue plus the decoder's held bytes (data-model).
 
+**R120 — System input details decided at implementation.** R106, R107,
+R111, R112, and R116 leave these open. Each is the narrowest reading
+(Art. IX); the archived change `openspec/changes/archive/2026-11-05-i55-system-input/`
+(design D1 to D5) has the full reasoning.
+- The POSIX resize wakeup is process-wide: one pipe and one `SIGWINCH`
+  action, installed by the first system terminal with input on, counted
+  by users, and never reinstalled while one is live, so the handler
+  never chains to itself. The last user puts the previous action back
+  only if the current one is still Overdrive's.
+- A system resize event is stored only when the re-read size differs
+  from the last one reported (or from create's), so a signal with an
+  unchanged size, a size that reads as 0, or a return to the reported
+  size gives none. Several wakeups before a wait give one event with
+  the latest size. Headless keeps R119's rule: every `set_size` is
+  reported once.
+- The system wait reads only when the queue is empty, into the whole
+  queue, and decodes at the platform clock. A timeout of 0 still polls
+  once. A signal other than the wakeup ends the platform wait early with
+  nothing ready; the wait then waits out the rest of its timeout, which
+  is not an error. A hang-up on stdin is `OVD_ERROR_PLATFORM`, after the
+  bytes queued before it are read: a macOS pty reports `POLLIN` with
+  `POLLHUP` and then reads 0, so the hang-up is remembered by the wait
+  and reported by the read that finds nothing (VERIFIED on macOS; Linux's
+  `EIO` is INFERRED).
+- Windows reads console input records: key-down `UnicodeChar` repeated
+  `wRepeatCount` times as UTF-8, a surrogate pair joined across reads,
+  an unpaired surrogate as U+FFFD, and a buffer-size record as a size
+  re-read. Other records are dropped. Repeats use only the room left
+  after one unit for each later record of the batch, so none is lost to
+  them; a surrogate half is taken once. Characters that arrive only on
+  key-up (Alt+numpad) are not read: R107 reads key-down.
+- The exit sequence is CAN, SGR 0, the reports that are on in the
+  reverse of the enter order, autowrap on, cursor shown, then leaving
+  the alternate screen or moving to the last row. Every system exit
+  sequence starts with CAN, with input on or off.
+
 ## C. Tensions
 
 | Articles | Tension | Resolution |

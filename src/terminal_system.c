@@ -11,7 +11,14 @@
  * (autowrap), SGR 0, and CUP are from xterm's control-sequence reference
  * (invisible-island.net/xterm/ctlseqs/ctlseqs.html), cited in R26 and
  * R33. They are not observed here in a real terminal (Art. X; the manual
- * checklist, OVD-12). */
+ * checklist, OVD-12).
+ *
+ * Feature 002 adds the report modes (R116, the same reference's "Mouse
+ * Tracking", "Bracketed Paste Mode", and FocusIn/FocusOut: 1002 button-
+ * event tracking, 1006 SGR coordinates, 2004, 1004), and CAN (0x18) at the
+ * start of the exit sequence, which cancels a control sequence a signal
+ * cut short (R112; ASSUMED from ECMA-48 8.3.6 and xterm's "Single-character
+ * functions"). The exit order is terminal.h's destroy contract. */
 #include "internal.h"
 
 #include "detect.h"
@@ -19,6 +26,7 @@
 #include <string.h>
 
 #define CSI "\x1b["
+#define CAN "\x18"
 #define SGR_RESET CSI "0m"
 #define AUTOWRAP_ON CSI "?7h"
 #define AUTOWRAP_OFF CSI "?7l"
@@ -26,19 +34,28 @@
 #define CURSOR_HIDE CSI "?25l"
 #define ALTERNATE_ENTER CSI "?1049h"
 #define ALTERNATE_LEAVE CSI "?1049l"
+#define MOUSE_ON CSI "?1002h" CSI "?1006h"
+#define MOUSE_OFF CSI "?1006l" CSI "?1002l"
+#define PASTE_ON CSI "?2004h"
+#define PASTE_OFF CSI "?2004l"
+#define FOCUS_ON CSI "?1004h"
+#define FOCUS_OFF CSI "?1004l"
 #define LITERAL_LENGTH(text) (sizeof(text) - 1)
 
 /* Digits in the largest row count, INT32_MAX = 2147483647. */
 static constexpr size_t ROW_DIGITS_MAX = 10;
 /* CSI <rows> ; 1 H: column 0 of the last row, as the diff moves (R26). */
 static constexpr size_t ROW_MOVE_MAX = LITERAL_LENGTH(CSI) + ROW_DIGITS_MAX + LITERAL_LENGTH(";1H");
-static constexpr size_t ENTER_MAX
-    = LITERAL_LENGTH(ALTERNATE_ENTER) + LITERAL_LENGTH(CURSOR_HIDE) + LITERAL_LENGTH(AUTOWRAP_OFF);
+static constexpr size_t REPORTS_MAX
+    = LITERAL_LENGTH(MOUSE_ON) + LITERAL_LENGTH(PASTE_ON) + LITERAL_LENGTH(FOCUS_ON);
+static constexpr size_t ENTER_MAX = LITERAL_LENGTH(ALTERNATE_ENTER) + LITERAL_LENGTH(CURSOR_HIDE)
+                                    + LITERAL_LENGTH(AUTOWRAP_OFF) + REPORTS_MAX;
 static constexpr size_t EXIT_MAX
-    = LITERAL_LENGTH(SGR_RESET) + LITERAL_LENGTH(AUTOWRAP_ON) + LITERAL_LENGTH(CURSOR_SHOW)
+    = LITERAL_LENGTH(CAN) + LITERAL_LENGTH(SGR_RESET) + REPORTS_MAX + LITERAL_LENGTH(AUTOWRAP_ON)
+      + LITERAL_LENGTH(CURSOR_SHOW)
       + (LITERAL_LENGTH(ALTERNATE_LEAVE) > ROW_MOVE_MAX ? LITERAL_LENGTH(ALTERNATE_LEAVE)
                                                          : ROW_MOVE_MAX);
-static constexpr size_t SEQUENCE_CAPACITY = 32;
+static constexpr size_t SEQUENCE_CAPACITY = 96;
 static_assert(ENTER_MAX <= SEQUENCE_CAPACITY && EXIT_MAX <= SEQUENCE_CAPACITY,
               "the enter and exit sequences must fit the sequence buffer");
 
@@ -81,13 +98,24 @@ static bool write_sequence(const Sequence *sequence)
     return !sequence->overflow && ovd_platform_write(sequence->bytes, sequence->length);
 }
 
-/* R26's exit sequence, best effort: a failed write cannot be reported
- * (R28), so it is not. rows is positive by OvdTerminal's invariant;
- * anything else moves to row 1. */
+/* R26's exit sequence with 002's CAN and reports, best effort: a failed
+ * write cannot be reported (R28), so it is not. The reports are turned
+ * off in the reverse of the enter order (R116). rows is positive by
+ * OvdTerminal's invariant; anything else moves to row 1. */
 static void write_exit(const OvdTerminalSystem *system, int32_t rows)
 {
     Sequence sequence = {};
+    PUT_LITERAL(&sequence, CAN);
     PUT_LITERAL(&sequence, SGR_RESET);
+    if (system->focus_events) {
+        PUT_LITERAL(&sequence, FOCUS_OFF);
+    }
+    if (system->bracketed_paste) {
+        PUT_LITERAL(&sequence, PASTE_OFF);
+    }
+    if (system->mouse) {
+        PUT_LITERAL(&sequence, MOUSE_OFF);
+    }
     PUT_LITERAL(&sequence, AUTOWRAP_ON);
     PUT_LITERAL(&sequence, CURSOR_SHOW);
     if (system->alternate_screen) {
@@ -100,16 +128,17 @@ static void write_exit(const OvdTerminalSystem *system, int32_t rows)
     write_sequence(&sequence);
 }
 
-OvdResult ovd_terminal_system_open(OvdTerminalSystem *system, bool alternate_screen,
+OvdResult ovd_terminal_system_open(OvdTerminalSystem *system, const OvdTerminalConfig *config,
                                    OvdSize *size)
 {
     /* Step 1, before anything is written or changed. */
     if (!ovd_platform_output_is_terminal()) {
         return OVD_ERROR_NOT_A_TERMINAL;
     }
-    /* Steps 2 to 4. On failure ovd_platform_enter has undone what it
-     * completed and records nothing. */
-    OvdResult result = ovd_platform_enter(&system->modes);
+    /* Steps 2 to 4, and with input 4b and 4c. ovd_platform_enter checks
+     * that stdin is a terminal first (002 R115); on failure it has undone
+     * what it completed and records nothing. */
+    OvdResult result = ovd_platform_enter(&system->modes, config->input, config->mouse);
     if (result != OVD_OK) {
         return result;
     }
@@ -119,7 +148,11 @@ OvdResult ovd_terminal_system_open(OvdTerminalSystem *system, bool alternate_scr
         ovd_platform_leave(&system->modes);
         return result;
     }
-    system->alternate_screen = alternate_screen;
+    system->alternate_screen = config->alternate_screen;
+    system->input = config->input;
+    system->mouse = config->mouse;
+    system->bracketed_paste = config->bracketed_paste;
+    system->focus_events = config->focus_events;
     return OVD_OK;
 }
 
@@ -152,6 +185,16 @@ OvdResult ovd_terminal_system_enter(OvdTerminalSystem *system, int32_t rows)
     }
     PUT_LITERAL(&sequence, CURSOR_HIDE);
     PUT_LITERAL(&sequence, AUTOWRAP_OFF);
+    /* 002 R116: in the same write, each report only if on. */
+    if (system->mouse) {
+        PUT_LITERAL(&sequence, MOUSE_ON);
+    }
+    if (system->bracketed_paste) {
+        PUT_LITERAL(&sequence, PASTE_ON);
+    }
+    if (system->focus_events) {
+        PUT_LITERAL(&sequence, FOCUS_ON);
+    }
     if (write_sequence(&sequence)) {
         return OVD_OK;
     }
@@ -178,4 +221,20 @@ OvdResult ovd_terminal_system_size(OvdSize *size)
 bool ovd_terminal_system_write(const char *bytes, size_t length)
 {
     return ovd_platform_write(bytes, length);
+}
+
+OvdResult ovd_terminal_system_wait(OvdTerminalSystem *system, int32_t timeout_ms, uint32_t *ready)
+{
+    return ovd_platform_input_wait(&system->modes, timeout_ms, ready);
+}
+
+OvdResult ovd_terminal_system_read(OvdTerminalSystem *system, char *bytes, size_t capacity,
+                                   size_t *length, bool *resized)
+{
+    return ovd_platform_input_read(&system->modes, bytes, capacity, length, resized);
+}
+
+uint64_t ovd_terminal_system_clock(void)
+{
+    return ovd_platform_clock_ms();
 }

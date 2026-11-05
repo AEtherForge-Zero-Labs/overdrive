@@ -140,11 +140,6 @@ OVD_API OvdResult ovd_terminal_create(const OvdTerminalConfig *config, OvdTermin
     if (!input_config_valid(config)) {
         return OVD_ERROR_INVALID_ARGUMENT;
     }
-    /* Interim, after every argument check and before anything is acquired:
-     * the system backend does not read input yet (T103). */
-    if (config->input && config->backend == OVD_BACKEND_SYSTEM) {
-        return OVD_ERROR_UNSUPPORTED;
-    }
 
     /* R28 steps 1 to 5 for the system backend, which then detects its
      * depth unless told not to. Headless takes both from the config and
@@ -153,8 +148,7 @@ OVD_API OvdResult ovd_terminal_create(const OvdTerminalConfig *config, OvdTermin
     OvdSize size = config->headless_size;
     OvdColorDepth depth = config->color_depth;
     if (config->backend == OVD_BACKEND_SYSTEM) {
-        const OvdResult opened
-            = ovd_terminal_system_open(&system, config->alternate_screen, &size);
+        const OvdResult opened = ovd_terminal_system_open(&system, config, &size);
         if (opened != OVD_OK) {
             return opened;
         }
@@ -205,6 +199,11 @@ OVD_API OvdResult ovd_terminal_create(const OvdTerminalConfig *config, OvdTermin
         system = t->system;
         free_terminal(t);
         return undo_open(config->backend, &system, OVD_ERROR_ALLOCATION);
+    }
+    /* The system backend reports a resize only when the size differs from
+     * this (R111). */
+    if (config->input) {
+        t->input.reported = size;
     }
 
     /* Step 7. On failure the enter has written the exit sequence (R28);

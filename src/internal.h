@@ -34,23 +34,32 @@
  * - modes records exactly the R28 steps 2 to 4 that open completed and no
  *   undo or close has reversed since;
  * - alternate_screen is the config's, and the exit sequence leaves the
- *   alternate screen exactly when it is set.
+ *   alternate screen exactly when it is set;
+ * - mouse, bracketed_paste, and focus_events are the config's reports
+ *   (002 R116): the enter sequence turns on, and the exit sequence off,
+ *   exactly these; any of them implies input.
  * Zero-initialized means nothing is recorded. */
 typedef struct OvdTerminalSystem {
     OvdPlatformModes modes;
     bool alternate_screen;
+    bool input;
+    bool mouse;
+    bool bracketed_paste;
+    bool focus_events;
 } OvdTerminalSystem;
 
 /* R28 steps 1 to 5, in order: stdout must be a terminal; the modes change
- * (platform.h's ovd_platform_enter); the size is read into *size. system
- * must be zero-initialized. Returns:
- * - OVD_ERROR_NOT_A_TERMINAL if stdout is not a terminal, with nothing
- *   written or changed;
+ * (platform.h's ovd_platform_enter, with raw input and the resize wakeup
+ * when config->input); the size is read into *size. system must be
+ * zero-initialized, and config valid (terminal.c checks it). Returns:
+ * - OVD_ERROR_NOT_A_TERMINAL if stdout is not a terminal, or input is on
+ *   and stdin is not (002 R115), with nothing written or changed;
  * - OVD_ERROR_PLATFORM if a mode cannot be changed or the size cannot be
  *   read or reads as 0 (R25), with every completed step undone.
- * On OVD_OK, *system records the changed modes and alternate_screen. */
+ * On OVD_OK, *system records the changed modes, alternate_screen, and the
+ * reports. */
 [[nodiscard]] OvdResult ovd_terminal_system_open(OvdTerminalSystem *system,
-                                                 bool alternate_screen, OvdSize *size);
+                                                 const OvdTerminalConfig *config, OvdSize *size);
 
 /* The color depth the environment asks for (detect.h), with the Windows
  * virtual-terminal flag taken from what open recorded. */
@@ -84,6 +93,15 @@ void ovd_terminal_system_close(OvdTerminalSystem *system, int32_t rows);
  * False if not every byte was accepted. */
 [[nodiscard]] bool ovd_terminal_system_write(const char *bytes, size_t length);
 
+/* Input on the system backend (002 R106, R107, R109, R111): platform.h's
+ * ovd_platform_input_wait, ovd_platform_input_read, and
+ * ovd_platform_clock_ms on the modes create recorded. */
+[[nodiscard]] OvdResult ovd_terminal_system_wait(OvdTerminalSystem *system, int32_t timeout_ms,
+                                                 uint32_t *ready);
+[[nodiscard]] OvdResult ovd_terminal_system_read(OvdTerminalSystem *system, char *bytes,
+                                                 size_t capacity, size_t *length, bool *resized);
+[[nodiscard]] uint64_t ovd_terminal_system_clock(void);
+
 /* ---- Input (input.c) -------------------------------------------------- */
 
 /* The fixed input queue (R110) and the paste chunk buffer: the worst-case
@@ -101,9 +119,13 @@ static_assert(OVD_INPUT_TEXT_SIZE >= OVD_DECODER_TEXT_MIN, "the decoder's chunk 
  * - start + length <= queue.size; the bytes not yet decoded are
  *   queue[start .. start + length), in the order they were fed;
  * - decoder's chunk buffer is text;
- * - clock_ms never decreases (headless virtual time, R109, design D2);
- * - resize_unreported is set only by ovd_terminal_set_size and cleared
- *   only by the wait that reports it (design D3). */
+ * - clock_ms never decreases: headless virtual time (R109), or on the
+ *   system backend the platform clock when the bytes were read;
+ * - resize_unreported is set by ovd_terminal_set_size (headless) or by a
+ *   wakeup whose re-read size differs from reported (system, R111), and
+ *   cleared only by the wait that reports it;
+ * - reported is, on the system backend, the size read at create or the
+ *   last size a resize event reported. */
 typedef struct OvdInput {
     OvdBlock queue;
     size_t start;
@@ -112,6 +134,7 @@ typedef struct OvdInput {
     OvdDecoder decoder;
     uint64_t clock_ms;
     bool resize_unreported;
+    OvdSize reported;
 } OvdInput;
 
 /* Takes queue and text, allocated with the sizes above, and starts the
