@@ -58,6 +58,8 @@ static constexpr size_t EXIT_MAX
 static constexpr size_t SEQUENCE_CAPACITY = 96;
 static_assert(ENTER_MAX <= SEQUENCE_CAPACITY && EXIT_MAX <= SEQUENCE_CAPACITY,
               "the enter and exit sequences must fit the sequence buffer");
+static_assert(EXIT_MAX <= OVD_PLATFORM_EXIT_MAX,
+              "the exit sequence must fit the restoration record (R112)");
 
 /* One lifecycle sequence, built on the stack and written in one write.
  * overflow is set if an append would not fit; the static_assert above
@@ -102,7 +104,7 @@ static bool write_sequence(const Sequence *sequence)
  * write cannot be reported (R28), so it is not. The reports are turned
  * off in the reverse of the enter order (R116). rows is positive by
  * OvdTerminal's invariant; anything else moves to row 1. */
-static void write_exit(const OvdTerminalSystem *system, int32_t rows)
+static void build_exit(const OvdTerminalSystem *system, int32_t rows, Sequence *out)
 {
     Sequence sequence = {};
     PUT_LITERAL(&sequence, CAN);
@@ -125,6 +127,13 @@ static void write_exit(const OvdTerminalSystem *system, int32_t rows)
         put_number(&sequence, rows > 0 ? rows : 1);
         PUT_LITERAL(&sequence, ";1H");
     }
+    *out = sequence;
+}
+
+static void write_exit(const OvdTerminalSystem *system, int32_t rows)
+{
+    Sequence sequence;
+    build_exit(system, rows, &sequence);
     write_sequence(&sequence);
 }
 
@@ -135,19 +144,35 @@ OvdResult ovd_terminal_system_open(OvdTerminalSystem *system, const OvdTerminalC
     if (!ovd_platform_output_is_terminal()) {
         return OVD_ERROR_NOT_A_TERMINAL;
     }
+    /* 002 R112: the record is reserved before the first mode change, so
+     * on POSIX a handled signal arriving on this thread from here on is
+     * delivered only once the record is armed, at create's last step. A
+     * second system terminal finds it owned and registers nothing. */
+    bool owner = false;
+    if (config->restore_on_exit) {
+        const OvdResult reserved = ovd_platform_restore_reserve(&owner);
+        if (reserved != OVD_OK) {
+            return reserved;
+        }
+    }
     /* Steps 2 to 4, and with input 4b and 4c. ovd_platform_enter checks
      * that stdin is a terminal first (002 R115); on failure it has undone
      * what it completed and records nothing. */
     OvdResult result = ovd_platform_enter(&system->modes, config->input, config->mouse);
+    if (result == OVD_OK) {
+        /* Step 5. */
+        result = ovd_platform_size(size);
+        if (result != OVD_OK) {
+            ovd_platform_leave(&system->modes);
+        }
+    }
     if (result != OVD_OK) {
+        if (owner) {
+            ovd_platform_restore_release();
+        }
         return result;
     }
-    /* Step 5. */
-    result = ovd_platform_size(size);
-    if (result != OVD_OK) {
-        ovd_platform_leave(&system->modes);
-        return result;
-    }
+    system->restore_owner = owner;
     system->alternate_screen = config->alternate_screen;
     system->input = config->input;
     system->mouse = config->mouse;
@@ -175,6 +200,10 @@ OvdColorDepth ovd_terminal_system_detect(const OvdTerminalSystem *system)
 void ovd_terminal_system_undo(OvdTerminalSystem *system)
 {
     ovd_platform_leave(&system->modes);
+    if (system->restore_owner) {
+        ovd_platform_restore_release();
+        system->restore_owner = false;
+    }
 }
 
 OvdResult ovd_terminal_system_enter(OvdTerminalSystem *system, int32_t rows)
@@ -196,6 +225,13 @@ OvdResult ovd_terminal_system_enter(OvdTerminalSystem *system, int32_t rows)
         PUT_LITERAL(&sequence, FOCUS_ON);
     }
     if (write_sequence(&sequence)) {
+        /* 002 R112: arm last, with the exit sequence for create's size
+         * (design D5 of the change that added it). */
+        if (system->restore_owner) {
+            Sequence exit;
+            build_exit(system, rows, &exit);
+            ovd_platform_restore_arm(&system->modes, exit.bytes, exit.overflow ? 0 : exit.length);
+        }
         return OVD_OK;
     }
     /* Part of the enter sequence may have reached the terminal, and the
@@ -209,8 +245,17 @@ OvdResult ovd_terminal_system_enter(OvdTerminalSystem *system, int32_t rows)
 
 void ovd_terminal_system_close(OvdTerminalSystem *system, int32_t rows)
 {
-    write_exit(system, rows);
+    /* 002 R112: the owner restores only if no handler has (FR-033), with
+     * the handled signals blocked until its handlers are put back. */
+    const bool restore = system->restore_owner ? ovd_platform_restore_claim() : true;
+    if (restore) {
+        write_exit(system, rows);
+    }
     ovd_platform_leave(&system->modes);
+    if (system->restore_owner) {
+        ovd_platform_restore_disarm(restore);
+        system->restore_owner = false;
+    }
 }
 
 OvdResult ovd_terminal_system_size(OvdSize *size)

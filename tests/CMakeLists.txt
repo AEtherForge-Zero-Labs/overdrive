@@ -270,3 +270,14 @@ endforeach()
 # test support.
 ovd_add_test(test_input)
 target_sources(test_input PRIVATE support/test_alloc.c)
+
+# Abnormal-exit restoration (OVD-19, T117) on a pty with forked children,
+# POSIX only; public API only. The sanitizers leave these signals alone,
+# so the sanitize preset tests Overdrive's handlers, not theirs.
+if(UNIX)
+    ovd_add_test(test_restore_pty)
+    set(restore_signal_options
+        "handle_segv=0:handle_sigbus=0:handle_sigfpe=0:handle_sigill=0:handle_abort=0")
+    set_tests_properties(test_restore_pty PROPERTIES ENVIRONMENT_MODIFICATION
+        "ASAN_OPTIONS=set:${restore_signal_options};UBSAN_OPTIONS=set:${restore_signal_options}")
+endif()

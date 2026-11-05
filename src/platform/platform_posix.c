@@ -1,12 +1,14 @@
 /*
  * platform.h on POSIX systems (Linux, macOS): research R11, R25-R28;
- * feature 002 R106 (raw input), R109 (clock), R111 (resize wakeup).
+ * feature 002 R106 (raw input), R109 (clock), R111 (resize wakeup), R112
+ * (abnormal-exit restoration).
  *
  * Each call is checked against, and cited from:
  * - POSIX.1-2024 (IEEE Std 1003.1-2024),
  *   https://pubs.opengroup.org/onlinepubs/9799919799/functions/<name>.html
  *   for isatty, tcgetattr, tcsetattr, write, read, poll, pipe, fcntl,
- *   sigaction, and clock_gettime; XBD <termios.h> and XBD 11.1.7
+ *   sigaction, pthread_sigmask, sigprocmask, raise, and clock_gettime;
+ *   XBD <termios.h> and XBD 11.1.7
  *   ("Non-Canonical Mode Input Processing") for the termios flags and
  *   VMIN/VTIME; XSH 2.4.3 for the async-signal-safe functions;
  * - ISO C for getenv;
@@ -31,6 +33,7 @@
 #include <limits.h>
 #include <poll.h>
 #include <signal.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -343,6 +346,339 @@ void ovd_platform_leave(OvdPlatformModes *modes)
 bool ovd_platform_virtual_terminal(const OvdPlatformModes *)
 {
     return false;
+}
+
+/* ---- Abnormal-exit restoration (002 R112) ---------------------------- */
+
+/* Spec FR-030's signals. The first four are termination signals: one the
+ * application already handles is its own (FR-032). */
+static const int HANDLED[] = { SIGHUP,  SIGINT,  SIGQUIT, SIGTERM, SIGABRT,
+                               SIGSEGV, SIGBUS,  SIGFPE,  SIGILL };
+enum : size_t { HANDLED_COUNT = sizeof HANDLED / sizeof HANDLED[0], TERMINATION_COUNT = 4 };
+
+typedef enum RestoreState : int {
+    RESTORE_IDLE = 0,
+    RESTORE_ARMED,
+    RESTORE_CLAIMED,
+    RESTORE_DONE,
+} RestoreState;
+
+/* ISO C23 7.14.1.1: a handler may use lock-free atomic objects, and
+ * POSIX.1-2024 XSH 2.4.3 lists the <stdatomic.h> functions as
+ * async-signal-safe "when called with an atomic argument". */
+static_assert(ATOMIC_INT_LOCK_FREE == 2 && ATOMIC_BOOL_LOCK_FREE == 2,
+              "the restoration record's atomics must be lock-free");
+
+/* The record (data-model, Restoration record). state and owned are atomic;
+ * the other fields are written only by the owner's creating or destroying
+ * thread while state is IDLE, published by arm's release store of ARMED,
+ * and read by handlers after an acquire load. */
+static atomic_int restore_state = RESTORE_IDLE;
+static atomic_bool restore_owned = false;
+static struct {
+    char exit[OVD_PLATFORM_EXIT_MAX];
+    size_t exit_length;
+    struct termios modes; /* stdin's termios before echo was turned off */
+    bool has_modes;       /* step 4 ran: stdin is a terminal */
+    struct sigaction previous[HANDLED_COUNT];
+    bool installed[HANDLED_COUNT];
+    sigset_t handled;     /* HANDLED as a set */
+    sigset_t thread_mask; /* the owner's mask, put back at unblock */
+} record;
+
+static void on_fatal(int signal, siginfo_t *info, void *context);
+
+static bool is_fatal_handler(const struct sigaction *action)
+{
+    return (action->sa_flags & SA_SIGINFO) != 0 && action->sa_sigaction == on_fatal;
+}
+
+/* An action that runs a function: sa_sigaction with SA_SIGINFO, else an
+ * sa_handler other than SIG_DFL and SIG_IGN (XSH sigaction). */
+static bool runs_handler(const struct sigaction *action)
+{
+    if ((action->sa_flags & SA_SIGINFO) != 0) {
+        return action->sa_sigaction != nullptr;
+    }
+    return action->sa_handler != SIG_DFL && action->sa_handler != SIG_IGN;
+}
+
+/* Calls the previous handler as its own action would have run it. Its
+ * action is not the installed one, so what the kernel does "on entry to
+ * the signal handler" for its flags is done here (XSH sigaction; R121):
+ * SA_RESETHAND resets the disposition to SIG_DFL, so a fault repeated or
+ * re-raised from the handler takes the default action, not this handler
+ * again; SA_NODEFER leaves the signal unblocked while it runs. Both calls
+ * are on XSH 2.4.3's list. A reset slot is no longer Overdrive's, so
+ * disarm leaves it at SIG_DFL, as without Overdrive. */
+static void call_previous(const struct sigaction *action, int signal, siginfo_t *info,
+                          void *context)
+{
+    if ((action->sa_flags & SA_RESETHAND) != 0) {
+        struct sigaction default_action = { .sa_handler = SIG_DFL };
+        sigemptyset(&default_action.sa_mask);
+        sigaction(signal, &default_action, nullptr);
+    }
+    if ((action->sa_flags & SA_NODEFER) != 0) {
+        sigset_t only;
+        sigemptyset(&only);
+        sigaddset(&only, signal);
+        pthread_sigmask(SIG_UNBLOCK, &only, nullptr);
+    }
+    if ((action->sa_flags & SA_SIGINFO) != 0) {
+        action->sa_sigaction(signal, info, context);
+    } else {
+        action->sa_handler(signal);
+    }
+}
+
+/* After chaining for a crash signal (step 3 only): a crash handler that
+ * raised its own signal meant to end by it. The signal is blocked while
+ * this handler runs, so it is pending now; were the slot still
+ * Overdrive's, it would come back here and chain again, forever. macOS
+ * does not report SA_RESETHAND when the action is read (VERIFIED on
+ * Darwin 27; R121), so this covers the re-raise pattern there too. Not
+ * done for termination signals, where a second one sent while the
+ * application's handler runs is common and must reach that handler
+ * again (FR-032). sigpending and sigismember are on XSH 2.4.3's list. */
+static void reset_if_reraised(int signal)
+{
+    sigset_t pending;
+    if (sigpending(&pending) == 0 && sigismember(&pending, signal) == 1) {
+        struct sigaction default_action = { .sa_handler = SIG_DFL };
+        sigemptyset(&default_action.sa_mask);
+        sigaction(signal, &default_action, nullptr);
+    }
+}
+
+/* Writes the record's exit sequence and puts the termios back, once
+ * (FR-033), in destroy's order: the exit sequence first, then the modes.
+ * Async-signal-safe: write and tcsetattr are on XSH 2.4.3's list. If
+ * another thread holds CLAIMED, waits for it to finish: that thread has
+ * these signals blocked (by the handler's sa_mask or by destroy's mask),
+ * so it is never this one. */
+static void restore_once(void)
+{
+    int expected = RESTORE_ARMED;
+    if (atomic_compare_exchange_strong_explicit(&restore_state, &expected, RESTORE_CLAIMED,
+                                                memory_order_acq_rel, memory_order_acquire)) {
+        size_t written = 0;
+        while (written < record.exit_length) {
+            const ssize_t step
+                = write(STDOUT_FILENO, record.exit + written, record.exit_length - written);
+            if (step > 0) {
+                written += (size_t)step;
+            } else if (step < 0 && errno == EINTR) {
+                continue;
+            } else {
+                break;
+            }
+        }
+        if (record.has_modes) {
+            set_input_modes(&record.modes);
+        }
+        atomic_store_explicit(&restore_state, RESTORE_DONE, memory_order_release);
+        return;
+    }
+    while (expected == RESTORE_CLAIMED) {
+        expected = atomic_load_explicit(&restore_state, memory_order_acquire);
+    }
+}
+
+/* R112's handler. Every call is async-signal-safe (XSH 2.4.3: write,
+ * tcsetattr, sigaction, raise, and the atomic functions), and errno is
+ * saved and restored, as 2.4.3 requires of a handler that may change it. */
+static void on_fatal(int signal, siginfo_t *info, void *context)
+{
+    const int saved_errno = errno;
+    /* Acquire: the fields arm wrote before ARMED are visible. IDLE means
+     * destroy has put the actions back and a later create may be filling
+     * the record (a signal racing destroy on another thread, not covered,
+     * FR-034): the saved actions are not chained then. */
+    const bool armed = atomic_load_explicit(&restore_state, memory_order_acquire) != RESTORE_IDLE;
+    size_t slot = 0;
+    while (slot < HANDLED_COUNT && HANDLED[slot] != signal) {
+        ++slot;
+    }
+    if (slot == HANDLED_COUNT) {
+        errno = saved_errno;
+        return;
+    }
+    const struct sigaction *previous = &record.previous[slot];
+    const bool chains = armed && runs_handler(previous);
+    /* 1. A termination signal the application handles is its own: call
+     *    its handler and restore nothing (FR-032). */
+    if (slot < TERMINATION_COUNT && chains) {
+        call_previous(previous, signal, info, context);
+        errno = saved_errno;
+        return;
+    }
+    /* 2. Restore once. 3. Then the application's handler, if any, and
+     *    return as it does: what follows is its choice, as without
+     *    Overdrive (R121). One that returns from a real fault re-faults
+     *    into this handler, which calls it again, as it would be. */
+    restore_once();
+    if (chains) {
+        call_previous(previous, signal, info, context);
+        reset_if_reraised(signal);
+        errno = saved_errno;
+        return;
+    }
+    /* 4. No handler to chain to: the default action, as without
+     *    Overdrive. raise "shall send the signal sig to the executing
+     *    thread"; the signal is blocked while
+     *    its handler runs (XSH sigaction: it is added to the mask "unless
+     *    SA_NODEFER" is set, and Overdrive's action does not set it), so
+     *    it stays pending and is delivered under SIG_DFL when this handler
+     *    returns. A real fault re-faults under it instead (ASSUMED: POSIX
+     *    leaves returning from a real fault's handler undefined;
+     *    test_restore_pty checks both). */
+    struct sigaction default_action = { .sa_handler = SIG_DFL };
+    sigemptyset(&default_action.sa_mask);
+    sigaction(signal, &default_action, nullptr);
+    raise(signal);
+    errno = saved_errno;
+}
+
+/* Blocks the handled signals in the calling thread, saving its mask.
+ * XSH sigprocmask: its "use ... in a multi-threaded process" is
+ * unspecified, so the thread's own mask is changed with pthread_sigmask. */
+static bool block_handled(void)
+{
+    return pthread_sigmask(SIG_BLOCK, &record.handled, &record.thread_mask) == 0;
+}
+
+/* Puts the saved mask back. XSH pthread_sigmask: if signals are left
+ * pending and unblocked, "at least one of those signals shall be
+ * delivered before the call to pthread_sigmask() returns". A synchronous
+ * fault raised while blocked is not covered (spec FR-034): "If any of the
+ * SIGFPE, SIGILL, SIGSEGV, or SIGBUS signals are generated while they are
+ * blocked, the result is undefined, unless the signal was generated by
+ * ... kill(), pthread_kill(), raise(), or sigqueue()". */
+static void unblock_handled(void)
+{
+    pthread_sigmask(SIG_SETMASK, &record.thread_mask, nullptr);
+}
+
+OvdResult ovd_platform_restore_reserve(bool *owner)
+{
+    if (owner == nullptr) {
+        return OVD_ERROR_INVALID_ARGUMENT;
+    }
+    *owner = false;
+    if (atomic_exchange(&restore_owned, true)) {
+        return OVD_OK; /* another system terminal owns it (R112 step 1) */
+    }
+    sigemptyset(&record.handled);
+    for (size_t i = 0; i < HANDLED_COUNT; ++i) {
+        sigaddset(&record.handled, HANDLED[i]);
+    }
+    if (!block_handled()) {
+        atomic_store(&restore_owned, false);
+        return OVD_ERROR_PLATFORM;
+    }
+    *owner = true;
+    return OVD_OK;
+}
+
+void ovd_platform_restore_arm(const OvdPlatformModes *modes, const char *exit, size_t length)
+{
+    /* R112 step 2: fill the record while it is IDLE. */
+    record.exit_length = length < sizeof record.exit ? length : sizeof record.exit;
+    if (exit != nullptr) {
+        memcpy(record.exit, exit, record.exit_length);
+    } else {
+        record.exit_length = 0;
+    }
+    record.has_modes = modes != nullptr && (modes->steps & STEP_INPUT_ECHO) != 0;
+    if (record.has_modes) {
+        Saved saved;
+        memcpy(&saved, modes->saved, sizeof saved);
+        record.modes = saved.input;
+    }
+    for (size_t i = 0; i < HANDLED_COUNT; ++i) {
+        record.installed[i] = false;
+        if (sigaction(HANDLED[i], nullptr, &record.previous[i]) != 0) {
+            /* Unreadable: left alone, as if ignored. */
+            record.previous[i] = (struct sigaction){ .sa_handler = SIG_IGN };
+            sigemptyset(&record.previous[i].sa_mask);
+            continue;
+        }
+        /* One that is already Overdrive's (an earlier restore could not
+         * put it back) is not chained to itself. */
+        if (is_fatal_handler(&record.previous[i])) {
+            record.previous[i] = (struct sigaction){ .sa_handler = SIG_DFL };
+            sigemptyset(&record.previous[i].sa_mask);
+        }
+    }
+    /* Step 3: publish, then install. */
+    atomic_store_explicit(&restore_state, RESTORE_ARMED, memory_order_release);
+    for (size_t i = 0; i < HANDLED_COUNT; ++i) {
+        const struct sigaction *previous = &record.previous[i];
+        /* A signal ignored before create stays ignored (FR-032). */
+        if ((previous->sa_flags & SA_SIGINFO) == 0 && previous->sa_handler == SIG_IGN) {
+            continue;
+        }
+        /* SA_SIGINFO, so an SA_SIGINFO previous handler gets its
+         * arguments; the application's restart and alternate-stack choices
+         * are kept; every handled signal waits while one is handled (R112),
+         * as do those the previous action blocked. */
+        struct sigaction action = {
+            .sa_flags = SA_SIGINFO | (previous->sa_flags & (SA_RESTART | SA_ONSTACK)),
+        };
+        action.sa_sigaction = on_fatal;
+        action.sa_mask = previous->sa_mask;
+        for (size_t j = 0; j < HANDLED_COUNT; ++j) {
+            sigaddset(&action.sa_mask, HANDLED[j]);
+        }
+        record.installed[i] = sigaction(HANDLED[i], &action, nullptr) == 0;
+    }
+    unblock_handled();
+}
+
+void ovd_platform_restore_release(void)
+{
+    unblock_handled();
+    atomic_store(&restore_owned, false);
+}
+
+bool ovd_platform_restore_claim(void)
+{
+    /* Blocked first, so no handler interrupts this thread's restore. If
+     * the mask cannot be set, the claim still proceeds: a handler on this
+     * thread would then find CLAIMED and wait forever, which pthread_sigmask
+     * failing (only for an invalid how, XSH) rules out. */
+    block_handled();
+    int expected = RESTORE_ARMED;
+    if (atomic_compare_exchange_strong_explicit(&restore_state, &expected, RESTORE_CLAIMED,
+                                                memory_order_acq_rel, memory_order_acquire)) {
+        return true;
+    }
+    while (expected == RESTORE_CLAIMED) {
+        expected = atomic_load_explicit(&restore_state, memory_order_acquire);
+    }
+    return false;
+}
+
+void ovd_platform_restore_disarm(bool claimed)
+{
+    if (claimed) {
+        atomic_store_explicit(&restore_state, RESTORE_DONE, memory_order_release);
+    }
+    /* Put back each slot that is still Overdrive's (FR-032). */
+    for (size_t i = 0; i < HANDLED_COUNT; ++i) {
+        if (!record.installed[i]) {
+            continue;
+        }
+        struct sigaction current;
+        if (sigaction(HANDLED[i], nullptr, &current) == 0 && is_fatal_handler(&current)) {
+            sigaction(HANDLED[i], &record.previous[i], nullptr);
+        }
+        record.installed[i] = false;
+    }
+    atomic_store_explicit(&restore_state, RESTORE_IDLE, memory_order_release);
+    unblock_handled();
+    atomic_store(&restore_owned, false);
 }
 
 /* ---- Input (002 R106, R109, R111) ------------------------------------ */

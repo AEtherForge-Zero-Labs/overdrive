@@ -142,10 +142,18 @@ typedef struct OvdTerminalConfig {
      * signal meanwhile. Only the first system terminal that is alive
      * installs them. Not covered: uncatchable signals, a normal exit
      * without destroy, a signal delivered to another thread while create
-     * or destroy runs, a fault raised inside create or destroy, and on
-     * Windows logoff and shutdown (only services receive them) and a
+     * or destroy runs, a fault raised inside create or destroy, on macOS
+     * a handler installed with SA_RESETHAND that returns from a real fault
+     * or re-raises a termination signal (it runs again instead of the
+     * process ending), and
+     * on Windows logoff and shutdown (only services receive them) and a
      * console control handler registered directly before create (it runs
-     * after the restore). False installs none of these; input's SIGWINCH
+     * after the restore). On Windows the C runtime decides the claim: if
+     * the application called signal() for SIGINT or SIGBREAK before
+     * create, Ctrl+C and Ctrl+Break restore even when it handles them; a
+     * SIGBREAK handler also claims console close; and a Ctrl+C arriving
+     * while create runs may not reach the application's handler. False
+     * installs none of these; input's SIGWINCH
      * handler is separate. Set false if the application manages these
      * signals itself. */
     bool restore_on_exit;

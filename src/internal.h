@@ -37,7 +37,10 @@
  *   alternate screen exactly when it is set;
  * - mouse, bracketed_paste, and focus_events are the config's reports
  *   (002 R116): the enter sequence turns on, and the exit sequence off,
- *   exactly these; any of them implies input.
+ *   exactly these; any of them implies input;
+ * - restore_owner is set exactly while this terminal owns the process-wide
+ *   restoration record (platform.h, 002 R112): from open until close or
+ *   undo, so only the first system terminal with restore_on_exit arms it.
  * Zero-initialized means nothing is recorded. */
 typedef struct OvdTerminalSystem {
     OvdPlatformModes modes;
@@ -46,6 +49,7 @@ typedef struct OvdTerminalSystem {
     bool mouse;
     bool bracketed_paste;
     bool focus_events;
+    bool restore_owner;
 } OvdTerminalSystem;
 
 /* R28 steps 1 to 5, in order: stdout must be a terminal; the modes change
@@ -57,7 +61,8 @@ typedef struct OvdTerminalSystem {
  * - OVD_ERROR_PLATFORM if a mode cannot be changed or the size cannot be
  *   read or reads as 0 (R25), with every completed step undone.
  * On OVD_OK, *system records the changed modes, alternate_screen, and the
- * reports. */
+ * reports. With config->restore_on_exit, the restoration record is
+ * reserved first (002 R112), and released again on any failure. */
 [[nodiscard]] OvdResult ovd_terminal_system_open(OvdTerminalSystem *system,
                                                  const OvdTerminalConfig *config, OvdSize *size);
 
@@ -67,7 +72,7 @@ typedef struct OvdTerminalSystem {
 
 /* Undoes R28 steps 4, 3, 2, writing nothing: create's rollback when a
  * step after open fails (allocation, or enter after its blocks are
- * freed). */
+ * freed). Then releases the restoration record if open reserved it. */
 void ovd_terminal_system_undo(OvdTerminalSystem *system);
 
 /* R28 step 7: writes the enter sequence in one write. On failure, part of
@@ -76,13 +81,16 @@ void ovd_terminal_system_undo(OvdTerminalSystem *system);
  * moving to the last of `rows` otherwise, and the result is
  * OVD_ERROR_IO. The modes stay recorded, so the caller can free step 6's
  * blocks and then call undo: every step undone in reverse order. rows is
- * the size read at create. */
+ * the size read at create. On success, the owner of the restoration record
+ * arms it with the exit sequence for those rows (002 R112). */
 [[nodiscard]] OvdResult ovd_terminal_system_enter(OvdTerminalSystem *system, int32_t rows);
 
 /* Destroy's restore (R26, R28): the exit sequence in one write, then
  * steps 4, 3, 2. rows is the last ended frame's row count, or the size
  * read at create if none has ended. Every step is attempted even if an
- * earlier one fails; nothing is reported. */
+ * earlier one fails; nothing is reported. The owner of the restoration
+ * record claims it first and skips the exit sequence if a handler already
+ * wrote it (FR-033), then disarms it last (002 R112). */
 void ovd_terminal_system_close(OvdTerminalSystem *system, int32_t rows);
 
 /* The terminal's size, re-read for each frame (FR-014). OVD_ERROR_PLATFORM,
