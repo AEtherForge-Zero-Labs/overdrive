@@ -483,6 +483,55 @@ static bool control_recover(int signal)
     return true;
 }
 
+/* An SA_RESETHAND crash handler: reports whether the terminal was
+ * restored, then returns (parameter 0, the fault repeats under SIG_DFL)
+ * or re-raises (parameter 1, the crash-reporter pattern). */
+static volatile sig_atomic_t reraise;
+
+static void application_oneshot(int signal)
+{
+    say(canonical() ? 'S' : 'U');
+    if (reraise) {
+        raise(signal);
+    }
+}
+
+static void install_oneshot(int parameter)
+{
+    reraise = parameter;
+    const int signals[] = { SIGSEGV, SIGBUS };
+    for (size_t i = 0; i < sizeof signals / sizeof signals[0]; ++i) {
+        struct sigaction action = { .sa_handler = application_oneshot,
+                                    .sa_flags = SA_RESETHAND };
+        sigemptyset(&action.sa_mask);
+        sigaction(signals[i], &action, nullptr);
+    }
+    /* A handler that loops ends the case by SIGALRM, not by hanging it. */
+    alarm(5);
+}
+
+/* FR-031, FR-032 (R121): the application's SA_RESETHAND still resets,
+ * so the fault ends the process as without Overdrive. */
+static bool subject_oneshot(int parameter)
+{
+    install_oneshot(parameter);
+    OvdTerminal *terminal = nullptr;
+    if (!create(config(true, true), &terminal)) {
+        return false;
+    }
+    fault();
+    say('x');
+    return false;
+}
+
+static bool control_oneshot(int parameter)
+{
+    install_oneshot(parameter);
+    fault();
+    say('x');
+    return false;
+}
+
 /* FR-032: destroy puts every action back as it was before create. */
 static bool subject_put_back(int)
 {
@@ -1100,6 +1149,46 @@ static bool case_recover(int signal)
     return true;
 }
 
+/* True if sigaction reports SA_RESETHAND when an action is read back.
+ * macOS does not (R121), so Overdrive cannot apply it there, and an
+ * SA_RESETHAND handler that returns from a real fault is not covered. */
+static bool resethand_reported(void)
+{
+    struct sigaction saved;
+    sigaction(SIGUSR1, nullptr, &saved);
+    struct sigaction action = { .sa_handler = application_oneshot, .sa_flags = SA_RESETHAND };
+    sigemptyset(&action.sa_mask);
+    sigaction(SIGUSR1, &action, nullptr);
+    struct sigaction now;
+    const bool reported = sigaction(SIGUSR1, nullptr, &now) == 0
+                          && (now.sa_flags & SA_RESETHAND) != 0;
+    sigaction(SIGUSR1, &saved, nullptr);
+    return reported;
+}
+
+static bool case_oneshot(int parameter)
+{
+    if (parameter == 0 && !resethand_reported()) {
+        fprintf(stderr, "skipped: this platform does not report SA_RESETHAND (R121)\n");
+        return true;
+    }
+    Outcome control;
+    Outcome subject;
+    CHECK(run(&(Run){ .name = "control", .body = control_oneshot, .parameter = parameter,
+                      .size = SMALL },
+              &control));
+    CHECK(WIFSIGNALED(control.ending.status) && WTERMSIG(control.ending.status) != SIGALRM);
+    CHECK(run(&(Run){ .name = "subject", .body = subject_oneshot, .parameter = parameter,
+                      .size = SMALL },
+              &subject));
+    CHECK(same_status(&subject, &control));
+    CHECK(reported(&subject, 'S'));
+    CHECK(!reported(&subject, 'U'));
+    CHECK(modes_restored(&subject));
+    CHECK(count(LITERAL(CAN)) == 1);
+    return true;
+}
+
 static bool case_put_back(int)
 {
     return case_exits_reporting(subject_put_back, 'p');
@@ -1170,6 +1259,8 @@ int main(void)
     for (size_t i = 0; i < sizeof RECOVERABLE / sizeof RECOVERABLE[0]; ++i) {
         ok = report_case("application crash handler returns", RECOVERABLE[i], case_recover) && ok;
     }
+    ok = report_case("SA_RESETHAND crash handler returns", 0, case_oneshot) && ok;
+    ok = report_case("SA_RESETHAND crash handler re-raises", 1, case_oneshot) && ok;
     ok = report_case("actions put back", 0, case_put_back) && ok;
     ok = report_case("create after destroy", 0, case_recreate) && ok;
     for (int seed = 1; seed <= 8; ++seed) {

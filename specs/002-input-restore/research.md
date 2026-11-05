@@ -476,6 +476,17 @@ D1 to D5) has the full reasoning.
   returns from a real fault re-faults into the chain, as it would
   without Overdrive. This supersedes the archived design's note that
   the default action is raised after the application's handler.
+- The application's action is replaced, so the kernel never applies its
+  `SA_RESETHAND` or `SA_NODEFER`: Overdrive's handler does, before
+  calling it (XSH `sigaction`: the reset happens "on entry to the signal
+  handler"). macOS does not report `SA_RESETHAND` when an action is read
+  back (VERIFIED on Darwin 27: set `0x4`, read `0`), so there it cannot
+  be applied. To keep the re-raise pattern working everywhere, a signal
+  still pending after the application's handler returns (it raised its
+  own signal) is reset to `SIG_DFL` first; without `SA_RESETHAND` that
+  changes only an endless re-raise loop. Not covered, on macOS: an
+  `SA_RESETHAND` crash handler that returns from a real fault repeats,
+  where without Overdrive the second fault ends the process.
 - On Windows, `SIGABRT` and the exception filter are installed, and
   what they replaced is saved, before the record is armed.
 - The exit sequence in the record is built once, at create, for the

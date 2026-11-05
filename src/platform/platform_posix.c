@@ -403,13 +403,45 @@ static bool runs_handler(const struct sigaction *action)
     return action->sa_handler != SIG_DFL && action->sa_handler != SIG_IGN;
 }
 
+/* Calls the previous handler as its own action would have run it. Its
+ * action is not the installed one, so what the kernel does "on entry to
+ * the signal handler" for its flags is done here (XSH sigaction; R121):
+ * SA_RESETHAND resets the disposition to SIG_DFL, so a fault repeated or
+ * re-raised from the handler takes the default action, not this handler
+ * again; SA_NODEFER leaves the signal unblocked while it runs. Both calls
+ * are on XSH 2.4.3's list. A reset slot is no longer Overdrive's, so
+ * disarm leaves it at SIG_DFL, as without Overdrive. */
 static void call_previous(const struct sigaction *action, int signal, siginfo_t *info,
                           void *context)
 {
+    if ((action->sa_flags & SA_RESETHAND) != 0) {
+        struct sigaction default_action = { .sa_handler = SIG_DFL };
+        sigemptyset(&default_action.sa_mask);
+        sigaction(signal, &default_action, nullptr);
+    }
+    if ((action->sa_flags & SA_NODEFER) != 0) {
+        sigset_t only;
+        sigemptyset(&only);
+        sigaddset(&only, signal);
+        pthread_sigmask(SIG_UNBLOCK, &only, nullptr);
+    }
     if ((action->sa_flags & SA_SIGINFO) != 0) {
         action->sa_sigaction(signal, info, context);
     } else {
         action->sa_handler(signal);
+    }
+    /* A handler that raised its own signal meant to end by it. The signal
+     * is blocked while this handler runs, so it is pending now; were the
+     * slot still Overdrive's, it would come back here and chain again,
+     * forever. macOS does not report SA_RESETHAND when the action is read
+     * (VERIFIED on Darwin 27; R121), so this covers the re-raise pattern
+     * there too. Without SA_RESETHAND the only behavior this changes is
+     * an endless re-raise loop. sigpending is on XSH 2.4.3's list. */
+    sigset_t pending;
+    if (sigpending(&pending) == 0 && sigismember(&pending, signal) == 1) {
+        struct sigaction default_action = { .sa_handler = SIG_DFL };
+        sigemptyset(&default_action.sa_mask);
+        sigaction(signal, &default_action, nullptr);
     }
 }
 

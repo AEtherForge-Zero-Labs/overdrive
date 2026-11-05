@@ -315,10 +315,12 @@ decoder exists.
   normal exit (`exit`, returning from `main`) without destroy, a
   signal delivered to another thread while create or destroy runs, a
   synchronous fault (`SIGSEGV`, `SIGBUS`, `SIGFPE`, `SIGILL`) raised on
-  the thread running create or destroy, and, on Windows, logoff and
-  shutdown events (only services receive them) and a console control
-  handler the application registered directly before create (it runs
-  after Overdrive has restored). On Windows the C runtime's console
+  the thread running create or destroy, on macOS a crash handler
+  installed with `SA_RESETHAND` that returns from a real fault (the
+  platform does not report the flag, research R121), and, on Windows,
+  logoff and shutdown events (only services receive them) and a console
+  control handler the application registered directly before create (it
+  runs after Overdrive has restored). On Windows the C runtime's console
   handler decides the claim (research R113): when the application set a
   C runtime handler for Ctrl+C or Ctrl+Break before create, those keys
   restore even though it handles them; an application Ctrl+Break handler
