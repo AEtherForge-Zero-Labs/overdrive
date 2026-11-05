@@ -214,6 +214,17 @@ add_test(NAME test_system_notty COMMAND "${CMAKE_COMMAND}"
 # allocator is test support.
 ovd_add_test(test_steady_state)
 target_sources(test_steady_state PRIVATE support/test_alloc.c)
+# The system backend on a pseudo-terminal the test opens itself (#43),
+# POSIX only: the enter and exit sequences, the modes create changes and
+# destroy restores, create's rollbacks, and the per-frame size read.
+# Public API only; the counting allocator and the replay oracle are test
+# support.
+if(UNIX)
+    ovd_add_test(test_system_pty)
+    target_sources(test_system_pty PRIVATE support/test_alloc.c)
+    target_link_libraries(test_system_pty PRIVATE overdrive_vt_replay)
+endif()
+
 # The hello_overdrive example with stdout redirected (US2 scenario 3,
 # OVD-12). The driver runs it with stdout sent to a file, through the
 # cross emulator when there is one, and fails unless it exits 1, the file
