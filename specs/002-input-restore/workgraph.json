@@ -1,0 +1,76 @@
+{
+  "schema": "overdrive-workgraph/1",
+  "feature": "002-input-restore",
+  "spec": "specs/002-input-restore/spec.md",
+  "contracts": "specs/002-input-restore/contracts/include/overdrive/",
+  "protocol": "docs/process/swarm.md",
+  "shared_append_only": [
+    "CMakeLists.txt",
+    "tests/CMakeLists.txt"
+  ],
+  "frozen_after": {
+    "include/overdrive/": "OVD-15"
+  },
+  "issues": [
+    {
+      "id": "OVD-15", "title": "Contract freeze for input and restoration, sanitizer preset",
+      "phase": 0, "tasks": ["T101","T102","T103","T104"], "depends_on": [],
+      "owns": ["include/overdrive/input.h","include/overdrive/terminal.h","include/overdrive/overdrive.h","src/terminal.c","tests/test_terminal.c","CMakePresets.json",".github/workflows/ci.yml",".specify/memory/baseline.md"],
+      "requirements": ["FR-001","FR-003","FR-013","FR-035","FR-040","SC-002","SC-007"],
+      "proof": ["cmake --preset debug","cmake --build --preset debug","ctest --preset debug","cmake --preset sanitize","cmake --build --preset sanitize","ctest --preset sanitize","cmake --preset windows-cross-debug","cmake --build --preset windows-cross-debug","ctest --preset windows-cross-debug"],
+      "tier": "sonnet",
+      "note": "owns the overdrive_public_headers line of CMakeLists.txt (not an append); contract freeze: include/overdrive/ changes after this need a contract-change issue; create with input on returns OVD_ERROR_UNSUPPORTED until OVD-17 (headless) and OVD-18 (system)"
+    },
+    {
+      "id": "OVD-16", "title": "Input decoder: keys, mouse, paste, focus",
+      "phase": 1, "tasks": ["T105","T106","T107","T108","T109"], "depends_on": ["OVD-15"],
+      "owns": ["src/decode.h","src/decode.c","tests/test_decode.c","tests/test_decode_fuzz.c"],
+      "requirements": ["FR-011","FR-012","FR-013","FR-014","FR-015","FR-016","FR-019","SC-001","SC-002"],
+      "proof": ["ctest --preset debug -R test_decode","ctest --preset sanitize -R test_decode"],
+      "tier": "opus"
+    },
+    {
+      "id": "OVD-17", "title": "Headless input API: wait and feed",
+      "phase": 2, "tasks": ["T110","T111","T112","T113"], "depends_on": ["OVD-16"],
+      "owns": ["src/input.c","src/terminal.c","src/internal.h","tests/test_input.c","tests/test_steady_state.c"],
+      "requirements": ["FR-004","FR-010","FR-016","FR-017","FR-018","FR-035","SC-004","SC-005"],
+      "proof": ["ctest --preset debug -R 'test_input|test_steady_state'","ctest --preset sanitize"],
+      "tier": "opus"
+    },
+    {
+      "id": "OVD-18", "title": "Input on a real terminal: raw mode, wait, resize, report modes",
+      "phase": 3, "tasks": ["T114","T115","T116"], "depends_on": ["OVD-17"],
+      "owns": ["src/platform/platform.h","src/platform/platform_posix.c","src/platform/platform_windows.c","src/terminal_system.c","src/input.c","src/internal.h","tests/test_system_pty.c"],
+      "requirements": ["FR-001","FR-002","FR-003","FR-010","FR-017","FR-019","FR-032","FR-036"],
+      "proof": ["ctest --preset debug -R test_system_pty","ctest --preset sanitize -R test_system_pty","ctest --preset windows-cross-debug"],
+      "tier": "opus",
+      "unverifiable_by_agent": "Windows console input and real-terminal behavior; human runs docs/validation/manual-checklist.md (OVD-20)"
+    },
+    {
+      "id": "OVD-19", "title": "Abnormal-exit restoration on POSIX and Windows",
+      "phase": 4, "tasks": ["T117","T118","T119","T120"], "depends_on": ["OVD-18"],
+      "owns": ["src/platform/platform.h","src/platform/platform_posix.c","src/platform/platform_windows.c","src/terminal_system.c","src/internal.h","tests/test_restore_pty.c"],
+      "requirements": ["FR-030","FR-031","FR-032","FR-033","FR-034","FR-035","FR-036","SC-003"],
+      "proof": ["ctest --preset debug -R test_restore_pty","ctest --preset sanitize -R test_restore_pty","ctest --preset windows-cross-debug"],
+      "tier": "opus",
+      "unverifiable_by_agent": "Windows console control events and exception filter in Windows Terminal; human runs docs/validation/manual-checklist.md (OVD-20)"
+    },
+    {
+      "id": "OVD-20", "title": "input_demo example and manual validation checklist",
+      "phase": 5, "tasks": ["T121","T122"], "depends_on": ["OVD-19"],
+      "owns": ["examples/input_demo.c","examples/CMakeLists.txt","docs/validation/manual-checklist.md"],
+      "requirements": ["SC-006"],
+      "proof": ["cmake --build --preset debug --target input_demo"],
+      "tier": "sonnet",
+      "needs_human_followup": "owner runs the manual checklist in Windows Terminal and one POSIX terminal; does not block merge"
+    },
+    {
+      "id": "OVD-21", "title": "Document the implemented input and restoration",
+      "phase": 5, "tasks": ["T123","T124"], "depends_on": ["OVD-19"],
+      "owns": ["docs/architecture.md","docs/compatibility.md","README.md"],
+      "requirements": ["FR-034","Art. XV"],
+      "proof": ["review against the merged tests' output"],
+      "tier": "sonnet"
+    }
+  ]
+}

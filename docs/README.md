@@ -16,3 +16,4 @@ Spec Kit reads these from `specs/`, so they live there rather than here.
 | Feature | Spec | Plan | Contracts | Tasks | Work graph |
 |---|---|---|---|---|---|
 | 001 Rendering core | [spec](../specs/001-render-core/spec.md) | [plan](../specs/001-render-core/plan.md) · [research](../specs/001-render-core/research.md) | [headers](../specs/001-render-core/contracts/include/overdrive/) | [tasks](../specs/001-render-core/tasks.md) | [workgraph.json](../specs/001-render-core/workgraph.json) |
+| 002 Input and abnormal-exit restoration (specified, not implemented) | [spec](../specs/002-input-restore/spec.md) | [plan](../specs/002-input-restore/plan.md) · [research](../specs/002-input-restore/research.md) | [headers](../specs/002-input-restore/contracts/include/overdrive/) | [tasks](../specs/002-input-restore/tasks.md) | [workgraph.json](../specs/002-input-restore/workgraph.json) |
