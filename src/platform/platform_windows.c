@@ -366,6 +366,22 @@ void ovd_platform_restore_arm(const OvdPlatformModes *modes, const char *exit, s
     if (modes != nullptr) {
         memcpy(&record.modes, modes->saved, sizeof record.modes);
     }
+    /* SIGABRT and the exception filter are installed while the record is
+     * still IDLE, so what each replaced is saved before the release store
+     * of ARMED publishes it; either handler running in between finds IDLE
+     * and does nothing (a crash inside create, not covered, FR-034). A
+     * SIGABRT ignored before create stays ignored (FR-032). */
+    const SignalHandler previous = signal(SIGABRT, on_abort);
+    record.abort_handler = previous != SIG_ERR;
+    record.previous_abort = previous == on_abort ? SIG_DFL : previous;
+    if (record.abort_handler && previous == SIG_IGN) {
+        signal(SIGABRT, SIG_IGN);
+        record.abort_handler = false;
+    }
+    const LPTOP_LEVEL_EXCEPTION_FILTER filter = SetUnhandledExceptionFilter(on_exception);
+    record.previous_filter = filter == on_exception ? nullptr : filter;
+    record.filter = true;
+
     atomic_store_explicit(&restore_state, RESTORE_ARMED, memory_order_release);
 
     /* Overdrive's console handler first, then the runtime's after it, so
@@ -374,19 +390,6 @@ void ovd_platform_restore_arm(const OvdPlatformModes *modes, const char *exit, s
     record.console = SetConsoleCtrlHandler(on_console, TRUE) != 0;
     register_runtime_handler(SIGINT);
     register_runtime_handler(SIGBREAK);
-
-    /* A SIGABRT ignored before create stays ignored (FR-032). */
-    const SignalHandler previous = signal(SIGABRT, on_abort);
-    record.abort_handler = previous != SIG_ERR;
-    record.previous_abort = previous == on_abort ? SIG_DFL : previous;
-    if (record.abort_handler && previous == SIG_IGN) {
-        signal(SIGABRT, SIG_IGN);
-        record.abort_handler = false;
-    }
-
-    const LPTOP_LEVEL_EXCEPTION_FILTER filter = SetUnhandledExceptionFilter(on_exception);
-    record.previous_filter = filter == on_exception ? nullptr : filter;
-    record.filter = true;
 }
 
 void ovd_platform_restore_release(void)

@@ -475,13 +475,19 @@ static void on_fatal(int signal, siginfo_t *info, void *context)
         errno = saved_errno;
         return;
     }
-    /* 2. Restore once. 3. Then the application's handler, if any. */
+    /* 2. Restore once. 3. Then the application's handler, if any, and
+     *    return as it does: what follows is its choice, as without
+     *    Overdrive (R121). One that returns from a real fault re-faults
+     *    into this handler, which calls it again, as it would be. */
     restore_once();
     if (chains) {
         call_previous(previous, signal, info, context);
+        errno = saved_errno;
+        return;
     }
-    /* 4. The default action, as without Overdrive. raise "shall send the
-     *    signal sig to the executing thread"; the signal is blocked while
+    /* 4. No handler to chain to: the default action, as without
+     *    Overdrive. raise "shall send the signal sig to the executing
+     *    thread"; the signal is blocked while
      *    its handler runs (XSH sigaction: it is added to the mask "unless
      *    SA_NODEFER" is set, and Overdrive's action does not set it), so
      *    it stays pending and is delivered under SIG_DFL when this handler

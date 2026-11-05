@@ -227,10 +227,13 @@ delivered only once the record is armed:
    `DONE` (the claimer cannot be this thread: the claiming thread has
    these signals blocked, by `sa_mask` or by destroy's mask). If `DONE`
    or `IDLE`, skip;
-3. call the previous handler if it was one, in the form its flags
-   declare (`sa_handler`, or `sa_sigaction` with `SA_SIGINFO`);
-4. reset the signal to `SIG_DFL` and `raise` it, then return. The signal
-   is blocked while its handler runs, so the raised one is pending and
+3. if the previous action was a handler, call it in the form its flags
+   declare (`sa_handler`, or `sa_sigaction` with `SA_SIGINFO`) and
+   return: what happens next is the application's handler's choice, as
+   without Overdrive (R121);
+4. otherwise, reset the signal to `SIG_DFL` and `raise` it, then
+   return. The signal is blocked while its handler runs, so the raised
+   one is pending and
    is delivered under the default action when the handler returns; a
    hardware fault that is not, re-faults under it. Both keep the exit
    status and core dump. The same path covers a crash signal sent with
@@ -465,6 +468,16 @@ D1 to D5) has the full reasoning.
   earlier destroy could not put it back) is treated as `SIG_DFL`, so the
   handler never chains to itself. A previous action that cannot be read
   is left alone, as if ignored.
+- After restoring for a crash signal (or `SIGABRT`) the application
+  handles, the handler calls the application's handler and returns,
+  without raising the default action: a handler that recovers from a
+  signal sent with `kill` keeps the process running, as without
+  Overdrive, and destroy then writes nothing more (FR-033). One that
+  returns from a real fault re-faults into the chain, as it would
+  without Overdrive. This supersedes the archived design's note that
+  the default action is raised after the application's handler.
+- On Windows, `SIGABRT` and the exception filter are installed, and
+  what they replaced is saved, before the record is armed.
 - The exit sequence in the record is built once, at create, for the
   size read then: without the alternate screen it moves to create's last
   row, which after a resize may differ from the row destroy would pick.

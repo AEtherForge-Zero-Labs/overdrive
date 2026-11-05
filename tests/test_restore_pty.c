@@ -447,6 +447,88 @@ static bool control_app_crash(int)
     return false;
 }
 
+static volatile sig_atomic_t recovered;
+
+/* An application crash handler that recovers by returning: reports
+ * whether the terminal was already restored. */
+static void application_recover(int)
+{
+    recovered = recovered + 1;
+    say(canonical() ? 'S' : 'U');
+}
+
+/* FR-031, FR-032 (R121): a crash signal sent with kill, whose
+ * application handler returns, does not end the process, as without
+ * Overdrive. The terminal is restored before the handler runs, and
+ * destroy then writes nothing more (FR-033). */
+static bool subject_recover(int signal)
+{
+    set_action(signal, application_recover);
+    OvdTerminal *terminal = nullptr;
+    if (!create(config(true, true), &terminal)) {
+        return false;
+    }
+    kill(getpid(), signal);
+    ovd_terminal_destroy(terminal);
+    if (recovered == 1 && canonical()) {
+        say('d');
+    }
+    return true;
+}
+
+static bool control_recover(int signal)
+{
+    set_action(signal, application_recover);
+    kill(getpid(), signal);
+    return true;
+}
+
+/* FR-032: destroy puts every action back as it was before create. */
+static bool subject_put_back(int)
+{
+    set_action(SIGTERM, application_term);
+    set_action(SIGHUP, SIG_IGN);
+    struct sigaction before[FATAL_COUNT];
+    for (size_t i = 0; i < FATAL_COUNT; ++i) {
+        sigaction(FATAL[i], nullptr, &before[i]);
+        sigaction(FATAL[i], &before[i], nullptr);
+        sigaction(FATAL[i], nullptr, &before[i]);
+    }
+    OvdTerminal *terminal = nullptr;
+    if (!create(config(true, true), &terminal)) {
+        return false;
+    }
+    ovd_terminal_destroy(terminal);
+    bool same = true;
+    for (size_t i = 0; i < FATAL_COUNT; ++i) {
+        struct sigaction now;
+        if (sigaction(FATAL[i], nullptr, &now) != 0 || !same_action(&now, &before[i])) {
+            fprintf(stderr, "subject: signal %d not put back\n", FATAL[i]);
+            same = false;
+        }
+    }
+    if (same) {
+        say('p');
+    }
+    return true;
+}
+
+/* R121: a create after a destroy owns the record again. */
+static bool subject_recreate(int)
+{
+    OvdTerminal *terminal = nullptr;
+    if (!create(config(true, true), &terminal)) {
+        return false;
+    }
+    ovd_terminal_destroy(terminal);
+    if (!create(config(true, true), &terminal)) {
+        return false;
+    }
+    kill(getpid(), SIGTERM);
+    say('x');
+    return false;
+}
+
 /* FR-033, R112: create and destroy forever; the parent sends SIGTERM at
  * a seeded delay. Every enter sequence is matched by exactly one exit. */
 static bool subject_loop(int)
@@ -998,6 +1080,47 @@ static bool case_app_crash(int)
     return true;
 }
 
+static bool case_recover(int signal)
+{
+    Outcome control;
+    Outcome subject;
+    CHECK(run(&(Run){ .name = "control", .body = control_recover, .parameter = signal,
+                      .size = SMALL },
+              &control));
+    CHECK(status_is_exit_0(control.ending.status));
+    CHECK(run(&(Run){ .name = "subject", .body = subject_recover, .parameter = signal,
+                      .size = SMALL },
+              &subject));
+    CHECK(same_status(&subject, &control));
+    CHECK(reported(&subject, 'S'));
+    CHECK(!reported(&subject, 'U'));
+    CHECK(reported(&subject, 'd'));
+    CHECK(modes_restored(&subject));
+    CHECK(count(LITERAL(CAN)) == 1);
+    return true;
+}
+
+static bool case_put_back(int)
+{
+    return case_exits_reporting(subject_put_back, 'p');
+}
+
+static bool case_recreate(int)
+{
+    Outcome control;
+    Outcome subject;
+    CHECK(run(&(Run){ .name = "control", .body = control_signal, .parameter = SIGTERM,
+                      .size = SMALL },
+              &control));
+    CHECK(run(&(Run){ .name = "subject", .body = subject_recreate, .size = SMALL }, &subject));
+    CHECK(same_status(&subject, &control));
+    CHECK(modes_restored(&subject));
+    CHECK(count(LITERAL(ENTER_MARK)) == 2);
+    CHECK(count(LITERAL(CAN)) == 2);
+    CHECK(ends_with(LITERAL(EXIT_REPORTS_ALTERNATE)));
+    return true;
+}
+
 /* The seed picks the delay; the parameter is the seed. */
 static bool case_loop(int seed)
 {
@@ -1043,6 +1166,12 @@ int main(void)
     ok = report_case("second system terminal", 0, case_second) && ok;
     ok = report_case("crash after destroy", 0, case_crash_after) && ok;
     ok = report_case("application crash handler", 0, case_app_crash) && ok;
+    static const int RECOVERABLE[] = { SIGABRT, SIGSEGV, SIGBUS, SIGFPE, SIGILL };
+    for (size_t i = 0; i < sizeof RECOVERABLE / sizeof RECOVERABLE[0]; ++i) {
+        ok = report_case("application crash handler returns", RECOVERABLE[i], case_recover) && ok;
+    }
+    ok = report_case("actions put back", 0, case_put_back) && ok;
+    ok = report_case("create after destroy", 0, case_recreate) && ok;
     for (int seed = 1; seed <= 8; ++seed) {
         ok = report_case("create and destroy under SIGTERM", seed, case_loop) && ok;
     }
