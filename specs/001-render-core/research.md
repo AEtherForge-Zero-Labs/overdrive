@@ -901,9 +901,11 @@ open. Each takes the narrowest reading (issue #14, labeled `assumption`).
   `OVERDRIVE_BUILD_EXAMPLES` on in its hidden base preset. The issue's
   proof command,
   `cmake --build --preset debug --target hello_overdrive`, then finds
-  the target, and every CI build compiles the example. OVD-01 owns the
-  file, but it is closed and no open issue owns the file. The option's
-  default in `CMakeLists.txt` stays off for consumers.
+  the target, and every CI build compiles the example. The `bench`
+  preset inherits the base preset too, so it builds the example as
+  well. OVD-01 owns the file, but it is closed and no open issue owns
+  the file. The option's default in `CMakeLists.txt` stays off for
+  consumers.
 - **US2 scenario 3 is also automated for the example.** The
   `hello_overdrive_notty` test requires exit status 1, an empty
   redirected stdout, and `OVD_ERROR_NOT_A_TERMINAL` on stderr. It runs on

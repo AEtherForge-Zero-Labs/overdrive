@@ -268,7 +268,9 @@ Run `hello_overdrive --no-alternate-screen 5`.
 - The last frame stays on the screen.
 - The summary line starts at the left end of the frame's last row. The
   library leaves the cursor at column 0 of that row.
-- The prompt follows below it.
+- The prompt follows below it. The summary's line break is on the last
+  row, so the screen scrolls up one row and the frame's top row leaves
+  the screen. That is expected.
 - The cursor is visible, typing echoes, and autowrap is on, checked as in
   M2.
 
