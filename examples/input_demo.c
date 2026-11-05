@@ -19,9 +19,14 @@
  * (the checklist's Windows check of Ctrl+C with input off).
  *
  * The demo waits for events without spinning (ovd_input_wait) and draws a
- * frame after each. It installs no signal handler of its own. Public API
- * and ISO C only, apart from the Windows access violation.
+ * frame after each. --no-input sleeps between redraws. It installs no
+ * signal handler of its own. Public API and ISO C only, apart from the
+ * Windows access violation and the sleep (nanosleep, or Windows' Sleep).
  */
+#if !defined(_WIN32)
+#define _POSIX_C_SOURCE 200809L /* nanosleep */
+#endif
+
 #include <overdrive/overdrive.h>
 
 #include <signal.h>
@@ -30,6 +35,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
 
 /* OVD-IDENTITY-001 §6.1. */
 constexpr uint32_t CARBON = 0x0B1018;
@@ -451,25 +461,17 @@ static bool draw(OvdTerminal *terminal, const Demo *demo, const char **failed_ca
     return true;
 }
 
-/* hello_overdrive's clock, for --no-input's redraws: timespec_get where
- * <time.h> has it (MinGW-w64 declares it only for the UCRT runtime), else
- * clock(). */
-static bool read_clock_ms(long long *now)
+/* Sleeps for about 100 ms without using the processor. ISO C's only sleep
+ * is thrd_sleep, and neither Apple's libc nor MinGW-w64 has <threads.h>,
+ * so this is the platform's own call. A signal may end nanosleep early
+ * (EINTR); the caller then only redraws sooner, so its result is unused. */
+static void pause_briefly(void)
 {
-#if defined(TIME_UTC)
-    struct timespec t;
-    if (timespec_get(&t, TIME_UTC) != TIME_UTC) {
-        return false;
-    }
-    *now = (long long)t.tv_sec * 1000 + t.tv_nsec / 1000000;
-    return true;
+#if defined(_WIN32)
+    Sleep(100);
 #else
-    const clock_t ticks = clock();
-    if (ticks == (clock_t)-1) {
-        return false;
-    }
-    *now = (long long)((double)ticks * (1000.0 / (double)CLOCKS_PER_SEC));
-    return true;
+    const struct timespec interval = {.tv_sec = 0, .tv_nsec = 100'000'000};
+    nanosleep(&interval, nullptr);
 #endif
 }
 
@@ -482,18 +484,7 @@ static bool run_without_input(OvdTerminal *terminal, const Demo *demo, const cha
         if (!draw(terminal, demo, failed_call, result)) {
             return false;
         }
-        long long start;
-        if (!read_clock_ms(&start)) {
-            *failed_call = "the clock";
-            *result = OVD_ERROR_PLATFORM;
-            return false;
-        }
-        long long now = start;
-        while (now >= start && now - start < 100) {
-            if (!read_clock_ms(&now)) {
-                break;
-            }
-        }
+        pause_briefly();
     }
 }
 

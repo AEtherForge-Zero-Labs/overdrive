@@ -383,6 +383,10 @@ build/debug/bin/input_demo
 On Windows, run `build\debug\bin\input_demo.exe` from a Windows Terminal
 tab, as in part 1. Below, `input_demo` stands for the program at its path.
 
+Don't use a `sanitize` build for part 2. The sanitizer's own signal
+handler runs when the program crashes, so `--crash=segv` then ends by
+SIGABRT, and I10 doesn't show what it checks.
+
 ### What the program does
 
 ```text
@@ -399,6 +403,8 @@ input_demo --no-input
 - **Options.** `--mouse`, `--paste`, and `--focus` turn on mouse reports,
   bracketed paste, and focus reports. Each option may be given once.
 - **Waiting.** The program waits for input without using the processor.
+  With `--no-input` it sleeps and redraws about every 100 ms, so a resize
+  still shows.
 - **Quitting.** `q` quits. The program restores the terminal, then prints
   `input_demo: N events read`, and the exit status is 0.
 - **Crash.** With `--crash=abort` or `--crash=segv`, pressing `c` ends the
@@ -414,8 +420,8 @@ Event lines look like this:
 
 | Event | Line |
 |---|---|
-| A character | `key   x  (U+0078)`, with `Shift+`, `Alt+`, `Ctrl+` before it |
-| A control character | `key   Ctrl+c`: the letter or symbol, with `Ctrl+` |
+| A character | `key   x  (U+0078)`: the character, then its code point |
+| A character with modifiers | `key   Alt+a  (U+0061)`; a control character is its letter or symbol with `Ctrl+`: `key   Ctrl+c  (U+0063)` |
 | A named key | `key   Ctrl+Up`, `key   Shift+Tab`, `key   F5` |
 | Mouse | `mouse press left at 10,4`; the last cell is marked with an orange `+` |
 | Paste | `paste 23 bytes, first line: hello` |
@@ -449,7 +455,7 @@ event line naming it:
   appears after a delay of about 50 ms;
 - the arrows and Home and End with Shift, Alt, and Ctrl, each alone and
   together, for example `key   Ctrl+Up` or `key   Shift+Alt+Right`;
-- Alt with a letter: `key   Alt+a`.
+- Alt with a letter: `key   Alt+a  (U+0061)`.
 
 **Expected:**
 - Nothing is echoed, and no key waits for Enter.
@@ -467,7 +473,8 @@ Press `q`. **Expected:** the shell is restored, and the exit status is 0.
 Run `input_demo`, and press Ctrl+C, Ctrl+\, and Ctrl+Z.
 
 **Expected:**
-- They appear as `key   Ctrl+c`, `key   Ctrl+\`, and `key   Ctrl+z`.
+- They appear as `key   Ctrl+c  (U+0063)`, `key   Ctrl+\  (U+005C)`, and
+  `key   Ctrl+z  (U+007A)`.
 - The program keeps running. It is not interrupted, it does not quit, and
   it is not suspended.
 
@@ -507,8 +514,17 @@ Press `q`. **Expected:** the shell is restored.
 ### I5: Paste
 
 Copy a few lines of text, for example three lines of which one is longer
-than 48 characters. Run `input_demo --paste`, and paste with the terminal's
-paste command.
+than 48 characters. The text must not contain the letters `q` or `c`: in
+the second run below, they arrive as keys, and `q` would quit the program.
+For example:
+
+```text
+A brown fox jumps over the lazy dog, then naps until noon.
+Two lines more.
+That is all.
+```
+
+Run `input_demo --paste`, and paste with the terminal's paste command.
 
 **Expected:**
 - One line, `paste N bytes, first line: ...`, where N is the size of the
@@ -517,7 +533,8 @@ paste command.
 - No key events are produced by the pasted text.
 
 Then run `input_demo` without `--paste` and paste the same text. Expected:
-it arrives as keys, a line break as `key   Enter`.
+it arrives as keys. A line break shows as `key   Enter`, or as
+`key   Ctrl+j  (U+006A)` where the terminal pastes it as a line feed.
 
 Press `q` each time. **Expected:** the shell is restored, and pasting in
 the shell afterwards does not show `200~` or `201~`.
