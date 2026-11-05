@@ -79,7 +79,7 @@ if(BUILD_SHARED_LIBS)
 endif()
 ovd_target_warnings(overdrive)
 
-set(overdrive_public_headers core.h terminal.h render.h overdrive.h)
+set(overdrive_public_headers core.h terminal.h render.h input.h overdrive.h)
 foreach(header IN LISTS overdrive_public_headers)
     target_sources(overdrive PRIVATE "include/overdrive/${header}")
 endforeach()

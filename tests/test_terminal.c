@@ -176,6 +176,11 @@ static bool test_config_default(void)
     CHECK(size_is(c.headless_size, 80, 24));
     CHECK(c.sink == nullptr && c.sink_context == nullptr);
     CHECK(c.allocator == nullptr);
+    /* 002's fields (R115): input and its reports off, the 50 ms escape
+     * delay, abnormal-exit restoration on. */
+    CHECK(!c.input && !c.mouse && !c.bracketed_paste && !c.focus_events);
+    CHECK(c.escape_delay_ms == 50);
+    CHECK(c.restore_on_exit);
     return true;
 }
 
@@ -237,6 +242,78 @@ static bool test_create_validation(void)
     c.headless_size = (OvdSize){ INT32_MAX, INT32_MAX };
     CHECK(rejects(&c, OVD_ERROR_ALLOCATION, &f.alloc));
 
+    CHECK(f.capture.calls == 0);
+    CHECK(fixture_done(&f));
+    return true;
+}
+
+/* R115: the input fields are checked before anything is acquired, on
+ * both backends, so a rejected system config never touches the process's
+ * terminal. */
+static bool test_input_config_validation(void)
+{
+    Fixture f;
+    fixture_init(&f, 80, 24);
+    for (int backend = 0; backend <= 1; ++backend) {
+        OvdTerminalConfig base = f.config;
+        base.backend = backend == 0 ? OVD_BACKEND_HEADLESS : OVD_BACKEND_SYSTEM;
+
+        /* Each report mode requires input. */
+        OvdTerminalConfig c = base;
+        c.mouse = true;
+        CHECK(rejects(&c, OVD_ERROR_INVALID_ARGUMENT, &f.alloc));
+        c = base;
+        c.bracketed_paste = true;
+        CHECK(rejects(&c, OVD_ERROR_INVALID_ARGUMENT, &f.alloc));
+        c = base;
+        c.focus_events = true;
+        CHECK(rejects(&c, OVD_ERROR_INVALID_ARGUMENT, &f.alloc));
+
+        /* The escape delay is validated even with input off. */
+        c = base;
+        c.escape_delay_ms = -1;
+        CHECK(rejects(&c, OVD_ERROR_INVALID_ARGUMENT, &f.alloc));
+        c.escape_delay_ms = 1001;
+        CHECK(rejects(&c, OVD_ERROR_INVALID_ARGUMENT, &f.alloc));
+        c.escape_delay_ms = INT32_MIN;
+        CHECK(rejects(&c, OVD_ERROR_INVALID_ARGUMENT, &f.alloc));
+        c.escape_delay_ms = INT32_MAX;
+        CHECK(rejects(&c, OVD_ERROR_INVALID_ARGUMENT, &f.alloc));
+
+        /* An invalid config is still invalid with input on. */
+        c = base;
+        c.input = true;
+        c.escape_delay_ms = 1001;
+        CHECK(rejects(&c, OVD_ERROR_INVALID_ARGUMENT, &f.alloc));
+
+        /* Interim (T103): a valid config with input on is unsupported
+         * until OVD-17 (headless) and OVD-18 (system) implement input. */
+        c = base;
+        c.input = true;
+        CHECK(rejects(&c, OVD_ERROR_UNSUPPORTED, &f.alloc));
+        c.mouse = true;
+        c.bracketed_paste = true;
+        c.focus_events = true;
+        c.escape_delay_ms = 0;
+        CHECK(rejects(&c, OVD_ERROR_UNSUPPORTED, &f.alloc));
+        c.escape_delay_ms = 1000;
+        CHECK(rejects(&c, OVD_ERROR_UNSUPPORTED, &f.alloc));
+    }
+    CHECK(f.capture.calls == 0);
+
+    /* The bounds of the delay, and restore_on_exit either way, are
+     * accepted with input off; headless ignores restore_on_exit (FR-035). */
+    const int32_t delays[] = { 0, 1000 };
+    for (size_t i = 0; i < sizeof delays / sizeof delays[0]; ++i) {
+        for (int restore = 0; restore <= 1; ++restore) {
+            OvdTerminalConfig c = f.config;
+            c.escape_delay_ms = delays[i];
+            c.restore_on_exit = restore == 1;
+            OvdTerminal *terminal = nullptr;
+            CHECK(ovd_terminal_create(&c, &terminal) == OVD_OK && terminal != nullptr);
+            ovd_terminal_destroy(terminal);
+        }
+    }
     CHECK(f.capture.calls == 0);
     CHECK(fixture_done(&f));
     return true;
@@ -659,6 +736,7 @@ int main(void)
     } tests[] = {
         { "config_default", test_config_default },
         { "create_validation", test_create_validation },
+        { "input_config_validation", test_input_config_validation },
         { "create_destroy", test_create_destroy },
         { "create_allocation_failure", test_create_allocation_failure },
         { "headless_ignores_environment", test_headless_ignores_environment },
