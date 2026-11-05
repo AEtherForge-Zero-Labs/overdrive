@@ -29,6 +29,32 @@ typedef struct OvdGrapheme {
     bool replaced;
 } OvdGrapheme;
 
+typedef enum OvdUtf8Status : uint8_t {
+    /* A well-formed scalar value of size bytes. */
+    OVD_UTF8_SCALAR = 0,
+    /* A maximal subpart of ill-formed UTF-8, size bytes (1 to 3): the
+     * byte after it ended it and is not part of it. */
+    OVD_UTF8_ILL_FORMED,
+    /* All size bytes given are a proper prefix of a well-formed sequence:
+     * more bytes decide it. */
+    OVD_UTF8_TRUNCATED,
+} OvdUtf8Status;
+
+/* One UTF-8 unit. code_point is the scalar value for OVD_UTF8_SCALAR,
+ * else 0. */
+typedef struct OvdUtf8Unit {
+    uint32_t code_point;
+    uint8_t size;
+    OvdUtf8Status status;
+} OvdUtf8Unit;
+
+/* Decodes the unit at bytes[0..available) per the Unicode Standard,
+ * Ch. 3, Table 3-7, reading no byte at or past available. The grapheme
+ * iterator below uses the same decoder, treating TRUNCATED as one more
+ * ill-formed subpart. Returns { 0, 0, OVD_UTF8_TRUNCATED } when bytes is
+ * nullptr or available is 0. */
+[[nodiscard]] OvdUtf8Unit ovd_unicode_decode_utf8(const char *bytes, size_t available);
+
 /* Reads the grapheme that starts at text[*offset], stores it in *out, and
  * advances *offset past every input byte it covers. Whatever is at
  * *offset starts a grapheme: an extender there is lone and becomes U+FFFD.

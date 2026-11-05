@@ -31,7 +31,8 @@ Embedded in `OvdTerminal`. Fields: parse state (ground, ESC, CSI, SS3,
 paste), the bounded parameter area (64 bytes) and its length, an
 `overflow` flag (discarding to the final byte), the paste end-marker
 match length (0–5), a held partial UTF-8 scalar (0–3 bytes), and the
-arrival time of a pending lone ESC.
+time the last byte was consumed, from which the escape delay runs
+(R118).
 
 Invariants:
 - the parameter length never exceeds its capacity; past it, `overflow`

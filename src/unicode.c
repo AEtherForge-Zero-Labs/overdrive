@@ -75,12 +75,14 @@ static Unit ill_formed(uint8_t size)
  * Unicode Standard, Ch. 3, Table 3-7 (well-formed UTF-8 byte sequences).
  * An ill-formed sequence yields its maximal subpart: the longest prefix
  * of a well-formed sequence, or one byte if none ("U+FFFD Substitution of
- * Maximal Subparts"). The byte that ends a subpart is not consumed. */
-static Unit decode(const unsigned char *bytes, size_t available)
+ * Maximal Subparts"). The byte that ends a subpart is not consumed. A
+ * well-formed prefix cut short by available is TRUNCATED, not ill-formed:
+ * more bytes may complete it. */
+static OvdUtf8Unit decode_utf8(const unsigned char *bytes, size_t available)
 {
     const unsigned char lead = bytes[0];
     if (lead < 0x80) {
-        return classify(lead, 1);
+        return (OvdUtf8Unit){ .code_point = lead, .size = 1, .status = OVD_UTF8_SCALAR };
     }
     uint8_t trails;
     uint32_t code_point;
@@ -106,23 +108,43 @@ static Unit decode(const unsigned char *bytes, size_t available)
             high = 0x8F; /* nothing above U+10FFFF */
         }
     } else {
-        return ill_formed(1); /* 80..C1, F5..FF never start a sequence */
+        /* 80..C1, F5..FF never start a sequence */
+        return (OvdUtf8Unit){ .size = 1, .status = OVD_UTF8_ILL_FORMED };
     }
     uint8_t size = 1;
     for (uint8_t i = 0; i < trails; ++i) {
         if (size >= available) {
-            return ill_formed(size); /* truncated by length */
+            return (OvdUtf8Unit){ .size = size, .status = OVD_UTF8_TRUNCATED };
         }
         const unsigned char trail = bytes[size];
         if (trail < low || trail > high) {
-            return ill_formed(size);
+            return (OvdUtf8Unit){ .size = size, .status = OVD_UTF8_ILL_FORMED };
         }
         code_point = (code_point << 6) | (trail & 0x3Fu);
         low = 0x80;
         high = 0xBF;
         ++size;
     }
-    return classify(code_point, size);
+    return (OvdUtf8Unit){ .code_point = code_point, .size = size, .status = OVD_UTF8_SCALAR };
+}
+
+OvdUtf8Unit ovd_unicode_decode_utf8(const char *bytes, size_t available)
+{
+    if (bytes == nullptr || available == 0) {
+        return (OvdUtf8Unit){ .status = OVD_UTF8_TRUNCATED };
+    }
+    return decode_utf8((const unsigned char *)bytes, available);
+}
+
+/* The grapheme iterator's view: a truncated sequence is one more maximal
+ * subpart, replaced like any other (R17). */
+static Unit decode(const unsigned char *bytes, size_t available)
+{
+    const OvdUtf8Unit unit = decode_utf8(bytes, available);
+    if (unit.status != OVD_UTF8_SCALAR) {
+        return ill_formed(unit.size);
+    }
+    return classify(unit.code_point, unit.size);
 }
 
 static uint8_t base_width(uint32_t code_point)

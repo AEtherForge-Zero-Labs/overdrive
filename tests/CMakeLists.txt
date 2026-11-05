@@ -254,3 +254,13 @@ endif()
     add_test(NAME hello_overdrive_notty COMMAND "${CMAKE_COMMAND}"
         -P "${CMAKE_CURRENT_BINARY_DIR}/hello_overdrive_notty.cmake")
 endif()
+
+# Input decoder (OVD-16). Its functions are hidden in a shared build, so
+# each test compiles the decoder and the UTF-8 decoder it reuses.
+foreach(decode_test IN ITEMS test_decode test_decode_fuzz)
+    ovd_add_test("${decode_test}")
+    target_sources("${decode_test}" PRIVATE "${PROJECT_SOURCE_DIR}/src/decode.c"
+        "${PROJECT_SOURCE_DIR}/src/unicode.c")
+    target_include_directories("${decode_test}" PRIVATE "${PROJECT_BINARY_DIR}/generated")
+    add_dependencies("${decode_test}" ovd_unicode_tables)
+endforeach()
