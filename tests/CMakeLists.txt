@@ -214,3 +214,32 @@ add_test(NAME test_system_notty COMMAND "${CMAKE_COMMAND}"
 # allocator is test support.
 ovd_add_test(test_steady_state)
 target_sources(test_steady_state PRIVATE support/test_alloc.c)
+# The hello_overdrive example with stdout redirected (US2 scenario 3,
+# OVD-12). The driver runs it with stdout sent to a file, through the
+# cross emulator when there is one, and fails unless it exits 1, the file
+# is empty, and stderr names OVD_ERROR_NOT_A_TERMINAL.
+if(OVERDRIVE_BUILD_EXAMPLES)
+    file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/hello_overdrive_notty.cmake" CONTENT "
+set(output \"${CMAKE_CURRENT_BINARY_DIR}/hello_overdrive_notty.out\")
+file(REMOVE \"\${output}\")
+execute_process(COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} \"$<TARGET_FILE:hello_overdrive>\"
+    OUTPUT_FILE \"\${output}\" ERROR_VARIABLE error RESULT_VARIABLE result)
+message(\"\${error}\")
+if(NOT result STREQUAL \"1\")
+    message(FATAL_ERROR \"hello_overdrive exited with \${result}, not 1\")
+endif()
+if(NOT EXISTS \"\${output}\")
+    message(FATAL_ERROR \"The redirected stdout file was not created\")
+endif()
+file(SIZE \"\${output}\" size)
+if(NOT size EQUAL 0)
+    file(READ \"\${output}\" bytes HEX)
+    message(FATAL_ERROR \"\${size} bytes reached stdout: \${bytes}\")
+endif()
+if(NOT error MATCHES \"ovd_terminal_create failed: OVD_ERROR_NOT_A_TERMINAL\")
+    message(FATAL_ERROR \"stderr does not name OVD_ERROR_NOT_A_TERMINAL\")
+endif()
+")
+    add_test(NAME hello_overdrive_notty COMMAND "${CMAKE_COMMAND}"
+        -P "${CMAKE_CURRENT_BINARY_DIR}/hello_overdrive_notty.cmake")
+endif()
