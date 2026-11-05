@@ -285,23 +285,6 @@ static bool test_input_config_validation(void)
         c.input = true;
         c.escape_delay_ms = 1001;
         CHECK(rejects(&c, OVD_ERROR_INVALID_ARGUMENT, &f.alloc));
-
-        /* Interim (T103): a valid system config with input on is
-         * unsupported until the system backend implements input. Headless
-         * input is test_input's. */
-        if (base.backend != OVD_BACKEND_SYSTEM) {
-            continue;
-        }
-        c = base;
-        c.input = true;
-        CHECK(rejects(&c, OVD_ERROR_UNSUPPORTED, &f.alloc));
-        c.mouse = true;
-        c.bracketed_paste = true;
-        c.focus_events = true;
-        c.escape_delay_ms = 0;
-        CHECK(rejects(&c, OVD_ERROR_UNSUPPORTED, &f.alloc));
-        c.escape_delay_ms = 1000;
-        CHECK(rejects(&c, OVD_ERROR_UNSUPPORTED, &f.alloc));
     }
     CHECK(f.capture.calls == 0);
 

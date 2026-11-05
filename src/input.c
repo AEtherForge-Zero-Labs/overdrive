@@ -1,8 +1,9 @@
 /* The input API (input.h): ovd_input_wait and ovd_input_feed over the
  * decoder (decode.h). One file of the terminal module, which owns the
  * input state (internal.h). The headless backend's bytes come from feed
- * and its time is a virtual clock. research.md R102, R103, R109, R110,
- * R114. */
+ * and its time is a virtual clock; the system backend's come from stdin
+ * through terminal_system.c, on the platform clock. research.md R102,
+ * R103, R106, R107, R109 to R111, R114. */
 #include "internal.h"
 
 #include <overdrive/input.h>
@@ -58,6 +59,96 @@ static bool next_event(OvdInput *input, OvdEvent *event)
     }
 }
 
+static bool same_size(OvdSize a, OvdSize b)
+{
+    return a.cols == b.cols && a.rows == b.rows;
+}
+
+static void advance(OvdInput *input, uint64_t now_ms)
+{
+    if (now_ms > input->clock_ms) {
+        input->clock_ms = now_ms;
+    }
+}
+
+/* A resize wakeup (R111): re-read the size and store a resize only if it
+ * differs from the last one reported. A failed read keeps the old size;
+ * the next frame reports that error. */
+static void check_size(OvdTerminal *terminal)
+{
+    OvdSize size;
+    if (ovd_terminal_system_size(&size) == OVD_OK && !same_size(size, terminal->input.reported)) {
+        terminal->input.reported = size;
+        terminal->input.resize_unreported = true;
+    }
+}
+
+/* The system backend's wait (R106, R107, R109, R111; OVD-18 design D3).
+ * Time is the platform clock. Bytes are read only when the queue is empty,
+ * into the whole queue, and decoded at the time they were read. A timeout
+ * of 0 still polls once. A signal other than the resize wakeup ends a
+ * platform wait early with nothing ready; the loop then waits out the
+ * rest. */
+static OvdResult wait_system(OvdTerminal *terminal, int32_t timeout_ms, OvdEvent *event)
+{
+    OvdInput *input = &terminal->input;
+    const bool forever = timeout_ms < 0;
+    advance(input, ovd_terminal_system_clock());
+    const uint64_t end = clock_after(input->clock_ms, timeout_ms);
+    bool polled = false;
+    for (;;) {
+        if (input->resize_unreported) {
+            input->resize_unreported = false;
+            *event = (OvdEvent){ .kind = OVD_EVENT_KIND_RESIZE, .size = input->reported };
+            return OVD_OK;
+        }
+        if (next_event(input, event)) {
+            return OVD_OK;
+        }
+        if (polled && !forever && input->clock_ms >= end) {
+            *event = (OvdEvent){ .kind = OVD_EVENT_KIND_NONE };
+            return OVD_OK;
+        }
+        /* The earlier of the timeout's end and the held bytes' deadline;
+         * without either, no limit. */
+        uint64_t limit = forever ? UINT64_MAX : end;
+        uint64_t deadline = 0;
+        if (ovd_decoder_deadline(&input->decoder, &deadline) && deadline < limit) {
+            limit = deadline;
+        }
+        int32_t wait_ms = -1;
+        if (limit != UINT64_MAX) {
+            const uint64_t span = limit > input->clock_ms ? limit - input->clock_ms : 0;
+            wait_ms = span > INT32_MAX ? INT32_MAX : (int32_t)span;
+        }
+        uint32_t ready = 0;
+        OvdResult result = ovd_terminal_system_wait(&terminal->system, wait_ms, &ready);
+        if (result != OVD_OK) {
+            return result;
+        }
+        polled = true;
+        advance(input, ovd_terminal_system_clock());
+        if ((ready & OVD_PLATFORM_READY_RESIZE) != 0) {
+            check_size(terminal);
+        }
+        if ((ready & OVD_PLATFORM_READY_INPUT) != 0) {
+            /* next_event returned false, so the queue is empty. */
+            size_t length = 0;
+            bool resized = false;
+            result = ovd_terminal_system_read(&terminal->system, input->queue.data,
+                                              input->queue.size, &length, &resized);
+            if (result != OVD_OK) {
+                return result;
+            }
+            input->start = 0;
+            input->length = length;
+            if (resized) {
+                check_size(terminal);
+            }
+        }
+    }
+}
+
 OVD_API OvdResult ovd_input_wait(OvdTerminal *terminal, int32_t timeout_ms, OvdEvent *event)
 {
     if (terminal == nullptr || event == nullptr) {
@@ -65,6 +156,9 @@ OVD_API OvdResult ovd_input_wait(OvdTerminal *terminal, int32_t timeout_ms, OvdE
     }
     if (!terminal->input_on || terminal->sink_running) {
         return OVD_ERROR_STATE;
+    }
+    if (terminal->backend == OVD_BACKEND_SYSTEM) {
+        return wait_system(terminal, timeout_ms, event);
     }
     OvdInput *input = &terminal->input;
 

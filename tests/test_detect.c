@@ -190,15 +190,42 @@ static bool test_platform_environment(void)
 
 static bool test_platform_arguments(void)
 {
-    CHECK(ovd_platform_enter(nullptr) == OVD_ERROR_INVALID_ARGUMENT);
+    CHECK(ovd_platform_enter(nullptr, false, false) == OVD_ERROR_INVALID_ARGUMENT);
+    CHECK(ovd_platform_enter(nullptr, true, true) == OVD_ERROR_INVALID_ARGUMENT);
 
-    /* A record that already holds a step is refused, unchanged. */
+    /* A record that already holds a step is refused, unchanged, with or
+     * without input. */
     OvdPlatformModes held = {};
     held.steps = 1;
     held.saved[0] = 0x5a;
-    CHECK(ovd_platform_enter(&held) == OVD_ERROR_INVALID_ARGUMENT);
+    CHECK(ovd_platform_enter(&held, false, false) == OVD_ERROR_INVALID_ARGUMENT);
+    CHECK(ovd_platform_enter(&held, true, true) == OVD_ERROR_INVALID_ARGUMENT);
     CHECK(held.steps == 1);
     CHECK(held.saved[0] == 0x5a);
+
+    /* Input calls need step 4b recorded (002): refused without it, and for
+     * nullptr or a capacity below the minimum. */
+    OvdPlatformModes none = {};
+    uint32_t ready = 0;
+    char bytes[OVD_PLATFORM_READ_MIN];
+    size_t length = 0;
+    bool resized = false;
+    CHECK(ovd_platform_input_wait(nullptr, 0, &ready) == OVD_ERROR_INVALID_ARGUMENT);
+    CHECK(ovd_platform_input_wait(&none, 0, nullptr) == OVD_ERROR_INVALID_ARGUMENT);
+    CHECK(ovd_platform_input_wait(&none, 0, &ready) == OVD_ERROR_INVALID_ARGUMENT);
+    CHECK(ovd_platform_input_read(&none, bytes, sizeof bytes, &length, &resized)
+          == OVD_ERROR_INVALID_ARGUMENT);
+    CHECK(ovd_platform_input_read(nullptr, bytes, sizeof bytes, &length, &resized)
+          == OVD_ERROR_INVALID_ARGUMENT);
+    CHECK(ovd_platform_input_read(&none, nullptr, sizeof bytes, &length, &resized)
+          == OVD_ERROR_INVALID_ARGUMENT);
+    CHECK(ovd_platform_input_read(&none, bytes, sizeof bytes - 1, &length, &resized)
+          == OVD_ERROR_INVALID_ARGUMENT);
+    CHECK(none.steps == 0);
+
+    /* The clock never runs backwards. */
+    const uint64_t first = ovd_platform_clock_ms();
+    CHECK(ovd_platform_clock_ms() >= first);
 
     /* Nothing recorded: leave does nothing, twice, and nullptr is safe. */
     OvdPlatformModes empty = {};

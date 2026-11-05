@@ -1,6 +1,6 @@
 /*
  * The operating-system layer under the system backend (FR-010, FR-011;
- * research R11, R25-R28).
+ * research R11, R25-R28; feature 002: R106, R107, R109, R111).
  *
  * Internal to Overdrive: nothing here is exported. One implementation is
  * compiled per build, platform_posix.c or platform_windows.c, chosen by
@@ -9,9 +9,11 @@
  * table: there is one platform per build.
  *
  * Every function works on the process's standard handles: stdout for
- * output and size, stdin for input modes. Nothing here allocates or keeps
- * state between calls; what ovd_platform_enter changes is recorded in the
- * caller's OvdPlatformModes.
+ * output and size, stdin for input modes and input. Nothing here
+ * allocates. What ovd_platform_enter changes is recorded in the caller's
+ * OvdPlatformModes; the one exception is POSIX's resize wakeup (step 4c),
+ * whose pipe and previous SIGWINCH action are process-wide, as a signal
+ * handler needs them (spec FR-036, research R111).
  */
 #ifndef OVERDRIVE_SRC_PLATFORM_PLATFORM_H
 #define OVERDRIVE_SRC_PLATFORM_PLATFORM_H
@@ -46,19 +48,72 @@ typedef struct OvdPlatformModes {
  * 4. input echo off (POSIX ECHO, Windows ENABLE_ECHO_INPUT), only if stdin
  *    is a terminal; otherwise the step is skipped, which is not an error
  *    (R27).
- * On OVD_OK, *modes records every completed step. On failure the
- * completed steps are undone in reverse, *modes records nothing, and the
- * result is OVD_ERROR_PLATFORM. Returns OVD_ERROR_INVALID_ARGUMENT,
- * changing nothing, if modes is nullptr or already records a step:
- * entering again would lose the values to restore. */
-[[nodiscard]] OvdResult ovd_platform_enter(OvdPlatformModes *modes);
+ * With input, then (002 R106, R107, R111):
+ * 4b. raw input. POSIX: ICANON, ISIG, IEXTEN, IXON, ICRNL, INLCR, IGNCR,
+ *     ISTRIP clear, VMIN and VTIME 0. Windows: line, echo, and processed
+ *     input off, virtual-terminal and window input on, and with mouse,
+ *     quick edit off;
+ * 4c. (POSIX) the resize wakeup: a non-blocking, close-on-exec self-pipe
+ *     and a SIGWINCH handler that writes to it and calls the previous
+ *     handler. Installed by the first system terminal with input on and
+ *     shared by later ones.
+ * With input, stdin must be a terminal: OVD_ERROR_NOT_A_TERMINAL
+ * otherwise, before anything changes. On OVD_OK, *modes records every
+ * completed step. On failure the completed steps are undone in reverse,
+ * *modes records nothing, and the result is OVD_ERROR_PLATFORM. Returns
+ * OVD_ERROR_INVALID_ARGUMENT, changing nothing, if modes is nullptr or
+ * already records a step: entering again would lose the values to
+ * restore. mouse is ignored without input. */
+[[nodiscard]] OvdResult ovd_platform_enter(OvdPlatformModes *modes, bool input, bool mouse);
 
-/* Undoes the steps *modes records, in reverse order (4, 3, 2), restoring
- * each mode to the value read before it changed. Every step is attempted
- * even if an earlier one fails; failures are not reported (R28). Then
- * *modes records nothing, so a second call does nothing. nullptr does
- * nothing. */
+/* Undoes the steps *modes records, in reverse order (4c, 4b, 4, 3, 2),
+ * restoring each mode to the value read before it changed. 4c puts the
+ * previous SIGWINCH action back, only if the current one is still
+ * Overdrive's and this is its last user, then closes the pipe. Every step
+ * is attempted even if an earlier one fails; failures are not reported
+ * (R28). Then *modes records nothing, so a second call does nothing.
+ * nullptr does nothing. */
 void ovd_platform_leave(OvdPlatformModes *modes);
+
+/* True if stdin is a terminal (POSIX isatty; Windows a console input
+ * buffer). */
+[[nodiscard]] bool ovd_platform_input_is_terminal(void);
+
+/* What ovd_platform_input_wait found ready. */
+typedef enum OvdPlatformReady : uint32_t {
+    OVD_PLATFORM_READY_INPUT = 1u << 0,  /* stdin has input to read */
+    OVD_PLATFORM_READY_RESIZE = 1u << 1, /* (POSIX) a SIGWINCH arrived */
+} OvdPlatformReady;
+
+/* Waits at most timeout_ms milliseconds, or without limit if it is
+ * negative, until stdin has input or, on POSIX, a resize wakeup arrives,
+ * and stores what is ready in *ready, a set of OvdPlatformReady: 0 when
+ * the time passed or another signal interrupted the wait. A resize wakeup
+ * is drained here, so several arrive as one. Requires *modes to record
+ * step 4b. Returns OVD_ERROR_INVALID_ARGUMENT for nullptr or without 4b,
+ * and OVD_ERROR_PLATFORM if the wait fails or stdin hung up. */
+[[nodiscard]] OvdResult ovd_platform_input_wait(OvdPlatformModes *modes, int32_t timeout_ms,
+                                                uint32_t *ready);
+
+/* The smallest capacity ovd_platform_input_read takes: one UTF-16 unit
+ * converted on Windows, with a pending unpaired surrogate repaired,
+ * needs 6 bytes. */
+#define OVD_PLATFORM_READ_MIN ((size_t)16)
+
+/* Reads what stdin holds now, without waiting, into bytes[0 .. capacity),
+ * storing the count in *length (0 if nothing is there). Windows reads
+ * console input records: key-down characters as UTF-8 (a surrogate pair
+ * may be split across calls; an unpaired surrogate becomes U+FFFD), and a
+ * buffer-size record sets *resized. On POSIX *resized is false. Requires
+ * step 4b and capacity >= OVD_PLATFORM_READ_MIN: OVD_ERROR_INVALID_ARGUMENT
+ * otherwise, or for nullptr. OVD_ERROR_PLATFORM if the read fails. */
+[[nodiscard]] OvdResult ovd_platform_input_read(OvdPlatformModes *modes, char *bytes,
+                                                size_t capacity, size_t *length, bool *resized);
+
+/* A monotonic clock in milliseconds, from an unspecified start. POSIX:
+ * clock_gettime(CLOCK_MONOTONIC); Windows: GetTickCount64, whose
+ * resolution is the system timer's, typically 10 to 16 ms. */
+[[nodiscard]] uint64_t ovd_platform_clock_ms(void);
 
 /* True if *modes records that Windows virtual-terminal output was
  * enabled; always false on POSIX and for nullptr. This is the "Windows

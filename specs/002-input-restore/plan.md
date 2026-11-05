@@ -111,7 +111,7 @@ unchanged and listed for completeness.
 | Raw input (POSIX `ICANON ISIG IEXTEN IXON ICRNL INLCR IGNCR ISTRIP`, `VMIN/VTIME`; Win line/processed input off, VT/window input on, quick edit off with mouse) | new step 4b, after echo, only with `input` | destroy (before echo), handler |
 | Alternate screen, cursor hidden, autowrap off | enter sequence (001) | exit sequence, handler |
 | Mouse 1002 + 1006, paste 2004, focus 1004 | enter sequence, each only if on | exit sequence (reverse order, only those on), handler |
-| POSIX self-pipe, `SIGWINCH` handler | with `input` | destroy (handler put back, pipe closed) |
+| POSIX self-pipe, `SIGWINCH` handler | new step 4c, after raw input, with `input`; process-wide, shared by every system terminal with input on | destroy (before raw input): the last user puts the previous action back if the current one is still Overdrive's, then closes the pipe |
 | Signal / console-control handlers, exception filter | last step, with `restore_on_exit`; handled signals blocked in the calling thread for all of create | destroy, after its restore: each slot still holding Overdrive's handler gets the previous one back, then the record is disarmed (R112) |
 
 A failed create undoes every completed step in reverse (001 FR-011).
