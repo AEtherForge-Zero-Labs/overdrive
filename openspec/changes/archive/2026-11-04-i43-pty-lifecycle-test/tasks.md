@@ -11,4 +11,5 @@
 ## 3. Delivery evidence
 
 - [x] 3.1 Build and test the `debug`, `release`, `debug-clang`, and `shared` presets from clean builds with zero warnings, and configure and build `windows-cross-debug` if MinGW is installed (the test must not be built there).
-- [x] 3.2 Reread the full diff and post the plan comment on #43, linking this change; the PR and its evidence are published by `tx:close`.
+- [x] 3.2 Correct `tests/test_terminal.c`'s comment that a valid system config is tested only with stdout redirected (found by the close's vocabulary scan); comment only.
+- [x] 3.3 Reread the full diff and post the plan comment on #43, linking this change; the PR and its evidence are published by `tx:close`.

@@ -223,8 +223,9 @@ static bool test_create_validation(void)
 
     /* The system backend's config is validated too (color_depth even
      * though detection would override it). A valid one would acquire the
-     * real terminal, so it is tested only with stdout redirected
-     * (test_system_notty). */
+     * process's terminal, so it is tested elsewhere: with stdout
+     * redirected (test_system_notty), and on a pty the test opens itself
+     * (test_system_pty, POSIX only). */
     c = f.config;
     c.backend = OVD_BACKEND_SYSTEM;
     c.color_depth = (OvdColorDepth)200;

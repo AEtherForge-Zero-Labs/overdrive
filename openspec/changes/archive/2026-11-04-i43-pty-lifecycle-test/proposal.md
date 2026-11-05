@@ -47,6 +47,10 @@ None.
 - New file `tests/test_system_pty.c`. Test code may include OS headers;
   `src/` still may not.
 - Append-only lines in `tests/CMakeLists.txt`.
+- One comment in `tests/test_terminal.c`, which said a valid system
+  config is tested only with stdout redirected (`test_system_notty`).
+  That is false once this test lands. The file is OVD-10's, which is
+  closed, and no open issue owns it. The edit touches the comment only.
 - No library source, public header, or build option changes. Windows
   builds, including the MinGW cross presets, do not build the test.
   ConPTY coverage is out of scope (issue #43).
