@@ -868,9 +868,13 @@ open. Each takes the narrowest reading (issue #14, labeled `assumption`).
   optional argument, decimal digits from 1 to 60, sets a longer run,
   because the checklist's resize and Ctrl+C steps need time.
 - **Ctrl+C ends the run cleanly.** ISO `signal(SIGINT, …)` installs a
-  handler that sets a `volatile sig_atomic_t` and installs itself again,
-  since System V semantics and the Windows C runtime reset the handler
-  before calling it. The run stops within one frame, restores the
+  handler that sets a flag and installs itself again, since System V
+  semantics and the Windows C runtime reset the handler before calling
+  it. The flag is a lock-free `atomic_bool`, not a
+  `volatile sig_atomic_t`, because the Windows C runtime runs the
+  handler on a new thread (Microsoft's `signal` reference). C23 allows a
+  handler to use a lock-free atomic object, and an atomic is also
+  defined between threads. The run stops within one frame, restores the
   terminal, and exits 0 with `, stopped by Ctrl+C` in its summary line.
   Create turns off only echo (POSIX `ECHO`, Windows
   `ENABLE_ECHO_INPUT`), so Ctrl+C still raises SIGINT. On Windows this

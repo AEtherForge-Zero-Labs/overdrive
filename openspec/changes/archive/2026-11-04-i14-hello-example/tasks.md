@@ -19,3 +19,4 @@
 - [x] 4.2 Record R48 in `research.md` and tick T037 and T038 in `tasks.md`.
 - [x] 4.3 Reread the full diff and post the plan comment on #14; the PR and its evidence are published by `tx:close`.
 - [x] 4.4 Make the example build with the CI cross toolchain, whose `<time.h>` lacks `timespec_get` and `TIME_UTC` (msvcrt): fall back to `clock()` there. Reproduce the failure locally with msvcrt headers, then confirm both runtimes compile clean, the suite passes, and a scratch build that forces the fallback paces correctly in the pseudo-terminal check.
+- [x] 4.5 Make the Ctrl+C flag a lock-free `atomic_bool`, because the Windows C runtime runs the SIGINT handler on a new thread, where a `volatile sig_atomic_t` races with the frame loop. Confirm a clean build with every available compiler, and rerun the single, double, and absent Ctrl+C pseudo-terminal scenarios.

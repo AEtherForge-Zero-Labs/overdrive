@@ -27,6 +27,7 @@
 #include <overdrive/overdrive.h>
 
 #include <signal.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -98,16 +99,20 @@ typedef struct Run {
     OvdColorDepth depth;
 } Run;
 
-static volatile sig_atomic_t stop_requested = 0;
+/* Set by the SIGINT handler. The Windows C runtime runs that handler on a
+ * new thread, where a volatile sig_atomic_t would race with the frame
+ * loop's reads. A lock-free atomic object is valid in a signal handler
+ * (C23 7.14.1.1) and between threads. */
+static_assert(ATOMIC_BOOL_LOCK_FREE == 2);
+static atomic_bool stop_requested = false;
 
-/* ISO C lets a handler assign a volatile sig_atomic_t and call signal for
- * its own signal. Installing itself again matters where the handler is
- * reset to the default before it runs (System V semantics, the Windows C
- * runtime): a second Ctrl+C would otherwise end the process with the
- * terminal still changed. */
+/* ISO C lets a handler call signal for its own signal. Installing itself
+ * again matters where the handler is reset to the default before it runs
+ * (System V semantics, the Windows C runtime): a second Ctrl+C would
+ * otherwise end the process with the terminal still changed. */
 static void request_stop(int signal_number)
 {
-    stop_requested = 1;
+    stop_requested = true;
     signal(signal_number, request_stop);
 }
 
@@ -198,7 +203,7 @@ static bool read_clock(long long *now)
  * cannot hang the program. */
 static void wait_until(long long start, long long target)
 {
-    while (stop_requested == 0) {
+    while (!stop_requested) {
         long long now;
         if (!read_clock(&now)) {
             return;
@@ -395,7 +400,7 @@ int main(int argc, char *argv[])
     };
     const char *failed_call = nullptr;
     int32_t shown = 0;
-    for (int32_t frame = 1; frame <= run.total && stop_requested == 0; ++frame) {
+    for (int32_t frame = 1; frame <= run.total && !stop_requested; ++frame) {
         OvdCanvas *canvas = nullptr;
         result = ovd_frame_begin(terminal, &canvas);
         if (result != OVD_OK) {
@@ -422,6 +427,6 @@ int main(int argc, char *argv[])
     }
     printf("hello_overdrive: %ld frames at %ldx%ld, %s%s\n", (long)shown, (long)size.cols,
            (long)size.rows, depth_name(run.depth),
-           stop_requested != 0 ? ", stopped by Ctrl+C" : "");
+           stop_requested ? ", stopped by Ctrl+C" : "");
     return EXIT_SUCCESS;
 }

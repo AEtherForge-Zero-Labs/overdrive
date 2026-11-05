@@ -63,8 +63,11 @@ that API shape the design:
   uses a longer run for the resize and Ctrl+C steps, because 5 seconds
   is too short to drag a window edge.
 - **Ctrl+C sets a flag.** It is installed with ISO `signal(SIGINT, …)`.
-  The handler writes a `volatile sig_atomic_t` and installs itself
-  again, which ISO C allows. Both the System V semantics that strict
+  The handler writes a lock-free `atomic_bool` and installs itself
+  again, which ISO C allows. A `volatile sig_atomic_t` is enough only
+  when the handler interrupts the thread that reads the flag. The
+  Windows C runtime runs the handler on a new thread, and an atomic is
+  defined there too. Both the System V semantics that strict
   glibc gives and the Windows C runtime reset the handler before
   calling it, so without the re-install a second Ctrl+C would kill the
   process before the terminal is restored. The frame loop and the
@@ -175,7 +178,8 @@ that API shape the design:
 ## Risks / Trade-offs
 
 - [Windows runs the SIGINT handler on a new thread, per Microsoft's
-  `signal` reference] → The handler only writes the flag. Whether
+  `signal` reference] → The handler only writes the flag, a lock-free
+  atomic object, so the frame loop's reads do not race with it. Whether
   Ctrl+C restores the terminal on Windows is ASSUMED until the
   checklist's Ctrl+C step runs there.
 - [`TIME_UTC` is a wall clock and can jump] → A backward jump past the
