@@ -120,7 +120,10 @@ repository is public, so GitHub enforces its rulesets on `main`: changes
 arrive only through pull requests, with no force-push or deletion, and
 the required checks must be green on an up-to-date head. A ruleset that
 pins the required checks to the GitHub Actions app makes a status posted
-through the API unable to satisfy them; rulesets are the owner's to
+through the API unable to satisfy them. The required `openspec-validate`
+workflow job also verifies that ruleset `25908557` keeps
+`openspec-validate`, `docs-form-check`, and `ci-ok` in its
+`required_status_checks`; rulesets are the owner's to
 create and change. Everything else
 in the gate holds only because the guard hook runs: the review verdict,
 `needs-human`, reserved paths, commit trailers, and the human-needed
