@@ -31,7 +31,9 @@ Measured frame costs, with the machine and command, are in
 terminal has been observed yet; see
 [`docs/compatibility.md`](docs/compatibility.md).
 
-Layout, motion, widgets, and input are later features. Each will be
+Input and abnormal-exit restoration are specified as feature 2,
+[`specs/002-input-restore/`](specs/002-input-restore/), and not
+implemented yet. Layout, motion, and widgets are later features, each
 specified when a consumer needs it.
 
 ## Build

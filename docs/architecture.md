@@ -168,5 +168,8 @@ first measurement.
 ## Not in this architecture (yet)
 
 `OVD-IDENTITY-001` §4 names Input, Layout, Motion, and Widgets, but
-feature 001 has no present requirement for them (Art. VII). Input is
-expected to be feature 002 because the first consumer needs it.
+feature 001 has no present requirement for them (Art. VII). Input,
+with abnormal-exit restoration, is feature 002 because the first
+consumer needs it; it is specified in
+[`specs/002-input-restore/`](../specs/002-input-restore/) and not
+implemented.

@@ -18,4 +18,4 @@
 ## 4. Checks
 
 - [x] 4.1 `openspec validate --all --strict` passes and the docs form check is clean
-- [x] 4.2 The diff touches only `specs/002-input-restore/` and this change
+- [x] 4.2 The diff touches only `specs/002-input-restore/`, this change, and the three docs that point at feature 002 (`docs/README.md`, `README.md`, `docs/architecture.md`)

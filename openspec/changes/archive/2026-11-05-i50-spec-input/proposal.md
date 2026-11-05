@@ -19,9 +19,14 @@ can be cut.
   - `plan.md`: constitution check, public API, modules, the terminal-mode
     table, workstreams;
   - `data-model.md`, `quickstart.md`;
-  - `contracts/include/overdrive/input.h` (new) and `terminal.h` (001's
-    header plus the input and restoration config fields);
-  - `tasks.md` and the cross-artifact analysis.
+  - `contracts/include/overdrive/input.h` (new), `terminal.h` (001's
+    header plus the input and restoration config fields), and
+    `overdrive.h` (the umbrella, now including `input.h`);
+  - `tasks.md`, `workgraph.json`, and the cross-artifact analysis.
+- The three docs that point at feature 002 say it is specified and not
+  implemented: the feature index in `docs/README.md`, the status in
+  `README.md`, and "Not in this architecture (yet)" in
+  `docs/architecture.md`.
 - No library code, public header, build file, or test changes.
   `include/overdrive/` is untouched: the contracts are proposals until
   an implementation issue copies them.
