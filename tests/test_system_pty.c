@@ -725,8 +725,26 @@ static bool winch_is(const struct sigaction *expected)
 {
     struct sigaction now;
     CHECK(sigaction(SIGWINCH, nullptr, &now) == 0);
+    if (now.sa_flags != expected->sa_flags) {
+        fprintf(stderr, "SIGWINCH sa_flags %#lx, expected %#lx\n", (unsigned long)now.sa_flags,
+                (unsigned long)expected->sa_flags);
+    }
     CHECK(now.sa_handler == expected->sa_handler);
     CHECK(now.sa_flags == expected->sa_flags);
+    return true;
+}
+
+/* SIGWINCH's action before create, as an application installed it: read,
+ * put back through sigaction, and read again. Destroy puts the previous
+ * action back through sigaction too, and a libc may add its own flags
+ * when it installs one (INFERRED: glibc's SA_RESTORER on Linux); the
+ * process's initial action, which no sigaction call installed, would not
+ * show them. */
+static bool winch_snapshot(struct sigaction *before)
+{
+    CHECK(sigaction(SIGWINCH, nullptr, before) == 0);
+    CHECK(sigaction(SIGWINCH, before, nullptr) == 0);
+    CHECK(sigaction(SIGWINCH, nullptr, before) == 0);
     return true;
 }
 
@@ -798,7 +816,7 @@ static bool resize_and_signal(Session *s, int32_t cols, int32_t rows)
 static bool case_input_modes(Session *s)
 {
     struct sigaction before;
-    CHECK(sigaction(SIGWINCH, nullptr, &before) == 0);
+    CHECK(winch_snapshot(&before));
     const OvdTerminalConfig c = input_config(s, false);
     CHECK_RESULT(ovd_terminal_create(&c, &s->system), OVD_OK);
     /* Create's batch plus the input queue and paste buffer (R114). */
@@ -963,7 +981,7 @@ static bool case_input_timing(Session *s)
 static bool case_input_null_stdin(Session *s)
 {
     struct sigaction before;
-    CHECK(sigaction(SIGWINCH, nullptr, &before) == 0);
+    CHECK(winch_snapshot(&before));
     const OvdTerminalConfig c = input_config(s, true);
     OvdTerminal *sentinel = (OvdTerminal *)&sentinel;
     OvdTerminal *out = sentinel;
@@ -1016,7 +1034,7 @@ static bool case_input_app_handler(Session *s)
 static bool case_input_refused(Session *s)
 {
     struct sigaction before;
-    CHECK(sigaction(SIGWINCH, nullptr, &before) == 0);
+    CHECK(winch_snapshot(&before));
     s->alloc.refuse_call = (size_t)s->parameter;
     const OvdTerminalConfig c = input_config(s, true);
     OvdTerminal *sentinel = (OvdTerminal *)&sentinel;
@@ -1034,7 +1052,7 @@ static bool case_input_refused(Session *s)
 static bool case_input_enter_fails(Session *s)
 {
     struct sigaction before;
-    CHECK(sigaction(SIGWINCH, nullptr, &before) == 0);
+    CHECK(winch_snapshot(&before));
     const OvdTerminalConfig c = input_config(s, true);
     OvdTerminal *sentinel = (OvdTerminal *)&sentinel;
     OvdTerminal *out = sentinel;
