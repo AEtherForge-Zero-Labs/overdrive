@@ -91,6 +91,7 @@ void ovd_terminal_system_close(OvdTerminalSystem *system, int32_t rows);
  * decoder can hold (data-model, Input buffers; design D5). */
 constexpr size_t OVD_INPUT_QUEUE_SIZE = 4096;
 constexpr size_t OVD_INPUT_TEXT_SIZE = 3 * OVD_INPUT_QUEUE_SIZE + OVD_DECODER_TEXT_MIN;
+static_assert(OVD_INPUT_TEXT_SIZE >= OVD_DECODER_TEXT_MIN, "the decoder's chunk minimum");
 
 /* A terminal's input state. Owned by the terminal module; input.c reads
  * and writes the fields, terminal.c only adopts and releases the blocks.

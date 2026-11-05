@@ -1,7 +1,15 @@
 /* Headless input (T110 to T112): ovd_input_wait and ovd_input_feed over
  * the decoder. Public API only, with the counting allocator. research.md
  * R102 (wait), R103 (paste), R109 (virtual time), R110 (feed, resize),
- * R114 (allocation); openspec change i54-headless-input, design D1-D5. */
+ * R114 (allocation); openspec change i54-headless-input, design D1-D5.
+ *
+ * The signal test reads dispositions with sigaction, which is POSIX.1,
+ * not ISO C: under -std=c23 glibc declares it only when a feature macro
+ * asks for it, as in src/platform/platform_posix.c. */
+#if !defined(_WIN32)
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include "support/test_alloc.h"
 
 #include <overdrive/overdrive.h>
@@ -365,12 +373,23 @@ static bool test_long_paste(void)
     size_t length = 0;
     memcpy(input, "\x1b[200~", 6);
     length = 6;
-    for (size_t i = 0; i < text_length; ++i) {
-        /* printable text and an occasional ESC [ that is not the marker */
-        const char c = (i % 97 == 96) ? '\x1b' : (i % 97 == 95) ? '\n' : (char)('A' + i % 57);
-        expected[i] = c;
-        input[length++] = c;
+    /* Printable text, newlines, lone ESCs (a 1-byte give-back), and near
+     * misses of the end marker, ESC [ 2 0 1 x (a 5-byte give-back). */
+    static const char near_miss[] = "\x1b[201x";
+    size_t near_misses = 0;
+    for (size_t i = 0; i < text_length;) {
+        if (i % 251 == 250 && i + sizeof near_miss - 1 <= text_length) {
+            memcpy(expected + i, near_miss, sizeof near_miss - 1);
+            i += sizeof near_miss - 1;
+            ++near_misses;
+            continue;
+        }
+        expected[i] = (i % 97 == 96) ? '\x1b' : (i % 97 == 95) ? '\n' : (char)('A' + i % 57);
+        ++i;
     }
+    CHECK(near_misses > 10);
+    memcpy(input + length, expected, text_length);
+    length += text_length;
     memcpy(input + length, "\x1b[201~", 6);
     length += 6;
 
