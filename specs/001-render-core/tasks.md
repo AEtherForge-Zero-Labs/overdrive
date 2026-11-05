@@ -80,8 +80,8 @@ Every behavior task is preceded by its test task, which must be seen failing.
 ## Phase 5 — Demonstration and documentation
 
 ### OVD-12 hello_overdrive (depends on OVD-09, OVD-11)
-- [ ] T037 [US2] Write `examples/hello_overdrive.c`: brand palette screen, tagline, boxes, a few seconds of frames with a changing counter, clean exit
-- [ ] T038 [US2] Write `docs/validation/manual-checklist.md`: steps and expected results for SC-007; record Windows Terminal and POSIX results in the PR
+- [x] T037 [US2] Write `examples/hello_overdrive.c`: brand palette screen, tagline, boxes, a few seconds of frames with a changing counter, clean exit
+- [x] T038 [US2] Write `docs/validation/manual-checklist.md`: steps and expected results for SC-007; record Windows Terminal and POSIX results in the PR
 
 ### OVD-14 Documentation of implemented state (depends on OVD-11, OVD-13)
 - [x] T039 Update `docs/architecture.md` and `README.md` from planned to implemented, with measured numbers only (Art. XV)
