@@ -842,3 +842,64 @@ labeled `assumption`).
   | Scrolling region | 200×60 | 5806–5866 | 128 | 155 |
   | No change | 200×60 | 0 | 51 | 64 |
   | SC-003 worst cell | 999×999 | 54 | 3919 | 5096 |
+
+**R48 — hello_overdrive choices.** T037, T038, and SC-007 leave these
+open. Each takes the narrowest reading (issue #14, labeled `assumption`).
+- **The example is ISO C, using the public API only, and paces frames
+  by spinning on `timespec_get`.** It uses the same clock rule as R47:
+  `TIME_MONOTONIC` when `<time.h>` defines it and it works, else
+  `TIME_UTC`. A clock that fails, or that reads earlier than the start,
+  ends the wait, so the program cannot hang. Spinning keeps one core busy
+  for the run.
+  *Rejected:*
+  - `thrd_sleep`: `<threads.h>` is absent from both the macOS SDK with
+    AppleClang 21 and MinGW-w64 GCC 15.2 (observed).
+  - `nanosleep` and `Sleep`: the `AGENTS.md` layout allows OS headers
+    only in `src/platform/`.
+- **"A few seconds" means 5 seconds at 20 frames per second.** An
+  optional argument, decimal digits from 1 to 60, sets a longer run,
+  because the checklist's resize and Ctrl+C steps need time.
+- **Ctrl+C ends the run cleanly.** ISO `signal(SIGINT, …)` installs a
+  handler that sets a `volatile sig_atomic_t` and installs itself again,
+  since System V semantics and the Windows C runtime reset the handler
+  before calling it. The run stops within one frame, restores the
+  terminal, and exits 0 with `, stopped by Ctrl+C` in its summary line.
+  Create turns off only echo (POSIX `ECHO`, Windows
+  `ENABLE_ECHO_INPUT`), so Ctrl+C still raises SIGINT. On Windows this
+  is ASSUMED until the checklist's M4 runs in Windows Terminal.
+- **The example uses the default config, unless an option says
+  otherwise.** The defaults are detection on, the alternate screen, and
+  no synchronized output, so the main checks test what a consumer gets.
+  - `--synchronized-output` turns `synchronized_output` on, for §E's
+    unverified "terminals ignoring mode 2026" (R34).
+  - `--no-alternate-screen` turns `alternate_screen` off, for the
+    exit-sequence CUP (R26, R46), which `src/terminal_system.c` defers
+    to the checklist.
+
+  One fixed row draws R38's case: a cell ending in ZWJ (U+1F469
+  U+200D), then U+1F467 in the next cell, drawn by a separate call, so
+  the renderer moves the cursor between them. These are present
+  requirements, because the earlier decisions defer those checks to this
+  checklist (Art. VII).
+- **Output after restore only.** An error goes to stderr, and the
+  summary line to stdout, only after `ovd_terminal_destroy`. Both
+  therefore land on the restored screen, and nothing the program prints
+  mixes with frame output.
+- **Examples are on in the shared presets.** `CMakePresets.json` turns
+  `OVERDRIVE_BUILD_EXAMPLES` on in its hidden base preset. The issue's
+  proof command,
+  `cmake --build --preset debug --target hello_overdrive`, then finds
+  the target, and every CI build compiles the example. OVD-01 owns the
+  file, but it is closed and no open issue owns the file. The option's
+  default in `CMakeLists.txt` stays off for consumers.
+- **US2 scenario 3 is also automated for the example.** The
+  `hello_overdrive_notty` test requires exit status 1, an empty
+  redirected stdout, and `OVD_ERROR_NOT_A_TERMINAL` on stderr. It runs on
+  every CI platform, under Wine for the Windows builds.
+- **The checklist holds procedure, not results.**
+  `docs/validation/manual-checklist.md` lists the checks with their
+  expected results. It covers US2 and every real-terminal check that
+  earlier decisions defer to it: §E's "Unverified" list, R33, R34, R38,
+  and R40. Each run's results go in the pull request or issue that asked
+  for the run, using the checklist's template, with the terminal,
+  version, and OS. A run is evidence only for that terminal.
