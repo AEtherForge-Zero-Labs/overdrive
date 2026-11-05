@@ -71,8 +71,8 @@ test_restore_pty` on Linux and macOS.
 
 ### OVD-20 input_demo and manual checklist [P] (depends on OVD-19)
 
-- [ ] T121 [P] [US2] Write `examples/input_demo.c` (name from `OVD-IDENTITY-001` §8.3): shows the last events (keys with modifiers, mouse at a cell, paste length and first line, focus, size), with options for mouse, paste, focus, and a deliberate crash (`--crash=abort` calls `abort`, `--crash=segv` raises `SIGSEGV` on POSIX and an access violation on Windows), quits on `q`; register it in `examples/CMakeLists.txt`
-- [ ] T122 [P] [US2] Extend `docs/validation/manual-checklist.md` with SC-006's steps and expected results: every key of spec US2 scenario 2 with modifiers, Ctrl+C as a key, mouse press, release, drag, wheel, a multi-line paste, focus out and in, resize while idle, closing the window, both `--crash` modes, `kill -TERM` (POSIX), Ctrl+C with input off (Windows: restored, then the process ends), with mouse off the terminal's own text selection still works, and the shell's state after each; record the Windows Terminal and POSIX terminal versions
+- [x] T121 [P] [US2] Write `examples/input_demo.c` (name from `OVD-IDENTITY-001` §8.3): shows the last events (keys with modifiers, mouse at a cell, paste length and first line, focus, size), with options for mouse, paste, focus, and a deliberate crash (`--crash=abort` calls `abort`, `--crash=segv` raises `SIGSEGV` on POSIX and an access violation on Windows), quits on `q`; register it in `examples/CMakeLists.txt`
+- [x] T122 [P] [US2] Extend `docs/validation/manual-checklist.md` with SC-006's steps and expected results: every key of spec US2 scenario 2 with modifiers, Ctrl+C as a key, mouse press, release, drag, wheel, a multi-line paste, focus out and in, resize while idle, closing the window, both `--crash` modes, `kill -TERM` (POSIX), Ctrl+C with input off (Windows: restored, then the process ends), with mouse off the terminal's own text selection still works, and the shell's state after each; record the Windows Terminal and POSIX terminal versions
 
 ### OVD-21 Document the implemented state [P] (depends on OVD-19)
 
