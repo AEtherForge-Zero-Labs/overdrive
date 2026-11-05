@@ -18,3 +18,4 @@
 - [x] 4.1 Run all six test presets from clean builds with zero warnings; `cmake --build --preset debug --target hello_overdrive` succeeds; the docs-form check passes on the new document.
 - [x] 4.2 Record R48 in `research.md` and tick T037 and T038 in `tasks.md`.
 - [x] 4.3 Reread the full diff and post the plan comment on #14; the PR and its evidence are published by `tx:close`.
+- [x] 4.4 Make the example build with the CI cross toolchain, whose `<time.h>` lacks `timespec_get` and `TIME_UTC` (msvcrt): fall back to `clock()` there. Reproduce the failure locally with msvcrt headers, then confirm both runtimes compile clean, the suite passes, and a scratch build that forces the fallback paces correctly in the pseudo-terminal check.

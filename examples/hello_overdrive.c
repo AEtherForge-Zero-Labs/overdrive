@@ -21,7 +21,8 @@
  *
  * Public API and ISO C only. C has no portable sleep (<threads.h> is
  * optional, and the macOS SDK and MinGW-w64 lack it), so frames are paced
- * by spinning on timespec_get, which keeps one core busy for the run.
+ * by spinning on a clock (read_clock), which keeps one core busy for the
+ * run.
  */
 #include <overdrive/overdrive.h>
 
@@ -35,7 +36,8 @@
 constexpr int32_t DEFAULT_SECONDS = 5;
 constexpr int32_t MAX_SECONDS = 60;
 constexpr int32_t FRAMES_PER_SECOND = 20;
-constexpr long long FRAME_NANOSECONDS = 1000000000LL / FRAMES_PER_SECOND;
+constexpr long long NANOSECONDS_PER_SECOND = 1000000000LL;
+constexpr long long FRAME_NANOSECONDS = NANOSECONDS_PER_SECOND / FRAMES_PER_SECOND;
 
 /* The layout is a fixed block, centered; a smaller terminal clips it. */
 constexpr int32_t BLOCK_COLS = 74;
@@ -157,30 +159,51 @@ static bool parse_options(int argc, char *argv[], Options *out)
     return true;
 }
 
-/* TIME_MONOTONIC is optional in C23; TIME_UTC is a wall clock and can
- * jump, which wait_until tolerates. */
-static bool read_clock(struct timespec *now)
+/* The pacing clock, in nanoseconds from an arbitrary origin.
+ *
+ * Where <time.h> has timespec_get, this uses TIME_MONOTONIC (optional in
+ * C23) if it works, else TIME_UTC, a wall clock that can jump, which
+ * wait_until tolerates. MinGW-w64 declares timespec_get and TIME_UTC only
+ * for the UCRT runtime, and Debian's cross toolchain targets msvcrt.
+ * There the clock is clock(). The Microsoft C runtime documents clock()
+ * as wall time since the process started. ISO C defines it as processor
+ * time, which the spinning keeps close to wall time. */
+static bool read_clock(long long *now)
 {
+#if defined(TIME_UTC)
+    struct timespec t;
 #if defined(TIME_MONOTONIC)
-    if (timespec_get(now, TIME_MONOTONIC) == TIME_MONOTONIC) {
+    if (timespec_get(&t, TIME_MONOTONIC) == TIME_MONOTONIC) {
+        *now = (long long)t.tv_sec * NANOSECONDS_PER_SECOND + t.tv_nsec;
         return true;
     }
 #endif
-    return timespec_get(now, TIME_UTC) == TIME_UTC;
+    if (timespec_get(&t, TIME_UTC) != TIME_UTC) {
+        return false;
+    }
+    *now = (long long)t.tv_sec * NANOSECONDS_PER_SECOND + t.tv_nsec;
+    return true;
+#else
+    const clock_t ticks = clock();
+    if (ticks == (clock_t)-1) {
+        return false;
+    }
+    *now = (long long)((double)ticks * ((double)NANOSECONDS_PER_SECOND / (double)CLOCKS_PER_SEC));
+    return true;
+#endif
 }
 
 /* Spins until target nanoseconds after start, or until Ctrl+C. A clock
  * that fails or reads earlier than start ends the wait, so a clock fault
  * cannot hang the program. */
-static void wait_until(const struct timespec *start, long long target)
+static void wait_until(long long start, long long target)
 {
     while (stop_requested == 0) {
-        struct timespec now;
+        long long now;
         if (!read_clock(&now)) {
             return;
         }
-        const long long elapsed = (long long)(now.tv_sec - start->tv_sec) * 1000000000LL
-                                  + (now.tv_nsec - start->tv_nsec);
+        const long long elapsed = now - start;
         if (elapsed < 0 || elapsed >= target) {
             return;
         }
@@ -347,7 +370,7 @@ int main(int argc, char *argv[])
               stderr);
         return EXIT_FAILURE;
     }
-    struct timespec start;
+    long long start;
     if (!read_clock(&start)) {
         fputs("hello_overdrive: no clock to pace frames by\n", stderr);
         return EXIT_FAILURE;
@@ -387,7 +410,7 @@ int main(int argc, char *argv[])
             break;
         }
         shown = frame;
-        wait_until(&start, frame * FRAME_NANOSECONDS);
+        wait_until(start, frame * FRAME_NANOSECONDS);
     }
     const OvdSize size = ovd_terminal_size(terminal);
     ovd_terminal_destroy(terminal);

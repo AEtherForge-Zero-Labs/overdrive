@@ -38,12 +38,18 @@ that API shape the design:
 
 ## Decisions
 
-- **Frames are paced by spinning on `timespec_get`.** Frame *n* is
-  shown no earlier than *n* × 50 ms after the first, giving 20 frames
-  per second. The clock is `TIME_MONOTONIC` when `<time.h>` defines it
-  (optional in C23) and it works, else `TIME_UTC`. That is the same
-  rule as the benchmark (R47). A clock that fails, or that jumps back
-  past the start, ends the wait instead of hanging.
+- **Frames are paced by spinning on a clock.** Frame *n* is shown no
+  earlier than *n* × 50 ms after the first, giving 20 frames per second.
+  - Where `<time.h>` has `timespec_get`, the clock is `TIME_MONOTONIC`
+    when `<time.h>` defines it (optional in C23) and it works, else
+    `TIME_UTC`. That is the same rule as the benchmark (R47).
+  - mingw-w64 declares `timespec_get` and `TIME_UTC` only for the UCRT
+    runtime, and the CI cross toolchain lacks both, as CI's first build
+    of this change showed. There the clock is `clock()`. Microsoft's C
+    runtime documents it as wall time since the process started.
+
+  A clock that fails, or that jumps back past the start, ends the wait
+  instead of hanging.
   *Rejected:*
   - `thrd_sleep`: `<threads.h>` is absent from both the macOS SDK
     with AppleClang 21 and MinGW-w64 GCC 15.2. Both were observed.
@@ -174,6 +180,12 @@ that API shape the design:
   checklist's Ctrl+C step runs there.
 - [`TIME_UTC` is a wall clock and can jump] → A backward jump past the
   start ends the wait. A forward jump only shortens the run.
+- [The `clock()` fallback is wall time only by Microsoft's definition;
+  ISO C defines it as processor time] → The fallback is compiled only
+  where `<time.h>` lacks `TIME_UTC`, which is MinGW-w64 without UCRT.
+  Elsewhere it would still pace about right, because the spinning keeps
+  processor time close to wall time. A scratch build that forced the
+  fallback on macOS ran 40 frames in a 2-second run.
 - [Spinning keeps one core busy] → The run is short and the design
   says so. Pacing that sleeps needs an OS header or `<threads.h>`.
 - [A signal other than SIGINT, such as SIGTERM, SIGHUP, or a closed

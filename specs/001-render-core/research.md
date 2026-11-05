@@ -846,11 +846,19 @@ labeled `assumption`).
 **R48 — hello_overdrive choices.** T037, T038, and SC-007 leave these
 open. Each takes the narrowest reading (issue #14, labeled `assumption`).
 - **The example is ISO C, using the public API only, and paces frames
-  by spinning on `timespec_get`.** It uses the same clock rule as R47:
-  `TIME_MONOTONIC` when `<time.h>` defines it and it works, else
-  `TIME_UTC`. A clock that fails, or that reads earlier than the start,
-  ends the wait, so the program cannot hang. Spinning keeps one core busy
-  for the run.
+  by spinning on a clock.** Where `<time.h>` has `timespec_get`, the
+  example uses the same clock rule as R47: `TIME_MONOTONIC` when
+  `<time.h>` defines it and it works, else `TIME_UTC`.
+  - The declared Debian cross toolchain's `<time.h>` declares neither
+    `timespec_get` nor `TIME_UTC` (observed in CI). mingw-w64 13's
+    `<time.h>` declares them only for the UCRT runtime (read).
+  - Without `TIME_UTC`, the example uses `clock()`. Microsoft's C runtime
+    documents `clock()` as wall time since the process started (cited,
+    not observed on Windows).
+
+  A clock that fails, or that reads earlier than the start, ends the
+  wait, so the program cannot hang. Spinning keeps one core busy for the
+  run.
   *Rejected:*
   - `thrd_sleep`: `<threads.h>` is absent from both the macOS SDK with
     AppleClang 21 and MinGW-w64 GCC 15.2 (observed).
