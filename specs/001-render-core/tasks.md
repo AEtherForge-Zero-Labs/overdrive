@@ -84,8 +84,8 @@ Every behavior task is preceded by its test task, which must be seen failing.
 - [x] T038 [US2] Write `docs/validation/manual-checklist.md`: steps and expected results for SC-007; record Windows Terminal and POSIX results in the PR
 
 ### OVD-14 Documentation of implemented state (depends on OVD-11, OVD-13)
-- [ ] T039 Update `docs/architecture.md` and `README.md` from planned to implemented, with measured numbers only (Art. XV)
-- [ ] T040 Write `docs/compatibility.md`: terminals actually tested, with versions
+- [x] T039 Update `docs/architecture.md` and `README.md` from planned to implemented, with measured numbers only (Art. XV)
+- [x] T040 Write `docs/compatibility.md`: terminals actually tested, with versions
 
 ## Dependencies
 
