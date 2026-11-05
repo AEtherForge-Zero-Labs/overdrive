@@ -378,6 +378,23 @@ the archived change `openspec/changes/archive/2026-11-05-i53-decoder/`
   give R105's forms. The ECMA-48 byte ranges in R104 stay ASSUMED:
   xterm's introduction states the modal rule but not the ranges.
 
+**R119 — Headless input details decided at implementation.** input.h and
+R109, R110 leave these open. Each one is the narrowest reading (Art. IX);
+the archived change `openspec/changes/archive/2026-11-05-i54-headless-input/`
+(design D1 to D5) has the full reasoning.
+- Headless time is one virtual clock per terminal, starting at 0 and
+  cumulative across waits; feed does not advance it. A wait whose
+  timeout reaches the held bytes' deadline resolves them there and
+  returns at once. So input.h's "at least the escape delay" is a
+  sufficient condition: two waits of 30 ms also reach a 50 ms deadline.
+- A stored size is reported before any queued byte is decoded, once,
+  with the latest size; a terminal with input off records nothing.
+- Feed is allowed from inside the sink: input.h names no state error
+  for it. Errors are checked in input.h's order: arguments, then the
+  backend, then the state.
+- The queue is linear and compacted by feed. The paste chunk buffer is
+  3 × the queue plus the decoder's held bytes (data-model).
+
 ## C. Tensions
 
 | Articles | Tension | Resolution |

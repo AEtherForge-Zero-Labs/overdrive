@@ -264,3 +264,9 @@ foreach(decode_test IN ITEMS test_decode test_decode_fuzz)
     target_include_directories("${decode_test}" PRIVATE "${PROJECT_BINARY_DIR}/generated")
     add_dependencies("${decode_test}" ovd_unicode_tables)
 endforeach()
+
+# Headless input (OVD-17): wait, feed, virtual time, the paste buffer, and
+# create's input allocations. Public API only; the counting allocator is
+# test support.
+ovd_add_test(test_input)
+target_sources(test_input PRIVATE support/test_alloc.c)

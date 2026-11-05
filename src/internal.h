@@ -13,9 +13,11 @@
 
 #include "alloc.h"
 #include "buffer.h"
+#include "decode.h"
 #include "output.h"
 #include "platform/platform.h"
 
+#include <overdrive/input.h>
 #include <overdrive/render.h>
 #include <overdrive/terminal.h>
 
@@ -82,6 +84,45 @@ void ovd_terminal_system_close(OvdTerminalSystem *system, int32_t rows);
  * False if not every byte was accepted. */
 [[nodiscard]] bool ovd_terminal_system_write(const char *bytes, size_t length);
 
+/* ---- Input (input.c) -------------------------------------------------- */
+
+/* The fixed input queue (R110) and the paste chunk buffer: the worst-case
+ * repair of a full queue, 3 bytes of U+FFFD per byte, plus the bytes the
+ * decoder can hold (data-model, Input buffers; design D5). */
+constexpr size_t OVD_INPUT_QUEUE_SIZE = 4096;
+constexpr size_t OVD_INPUT_TEXT_SIZE = 3 * OVD_INPUT_QUEUE_SIZE + OVD_DECODER_TEXT_MIN;
+
+/* A terminal's input state. Owned by the terminal module; input.c reads
+ * and writes the fields, terminal.c only adopts and releases the blocks.
+ *
+ * Invariants:
+ * - queue.size == OVD_INPUT_QUEUE_SIZE and text.size == OVD_INPUT_TEXT_SIZE;
+ * - start + length <= queue.size; the bytes not yet decoded are
+ *   queue[start .. start + length), in the order they were fed;
+ * - decoder's chunk buffer is text;
+ * - clock_ms never decreases (headless virtual time, R109, design D2);
+ * - resize_unreported is set only by ovd_terminal_set_size and cleared
+ *   only by the wait that reports it (design D3). */
+typedef struct OvdInput {
+    OvdBlock queue;
+    size_t start;
+    size_t length;
+    OvdBlock text;
+    OvdDecoder decoder;
+    uint64_t clock_ms;
+    bool resize_unreported;
+} OvdInput;
+
+/* Takes queue and text, allocated with the sizes above, and starts the
+ * decoder with the escape delay. Returns false only if text is smaller
+ * than the decoder needs, which the sizes above rule out; the blocks are
+ * then still recorded, so ovd_input_release frees them. */
+[[nodiscard]] bool ovd_input_adopt(OvdInput *input, OvdBlock queue, OvdBlock text,
+                                   uint32_t escape_delay_ms);
+
+/* Releases both blocks; a zero-initialized OvdInput releases nothing. */
+void ovd_input_release(OvdInput *input, const OvdAllocator *allocator);
+
 /* ---- The terminal (terminal.c) --------------------------------------- */
 
 /* Invariants:
@@ -98,7 +139,9 @@ void ovd_terminal_system_close(OvdTerminalSystem *system, int32_t rows);
  * - last_rows is positive: the rows of the last frame passed to
  *   ovd_frame_end, or of the size at create if none has been (R26, R46);
  * - system is used only by the system backend, and records what its
- *   create changed until destroy restores it. */
+ *   create changed until destroy restores it;
+ * - input_on is the config's input, and input holds its blocks exactly
+ *   when input_on (it is zero-initialized otherwise). */
 struct OvdTerminal {
     OvdAllocator allocator;
     OvdBlock self;
@@ -124,6 +167,9 @@ struct OvdTerminal {
     bool sink_running;
 
     OvdTerminalSystem system;
+
+    bool input_on;
+    OvdInput input;
 };
 
 #endif /* OVERDRIVE_SRC_INTERNAL_H */
