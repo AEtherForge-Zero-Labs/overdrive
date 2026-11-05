@@ -315,8 +315,9 @@ decoder exists.
   normal exit (`exit`, returning from `main`) without destroy, a
   signal delivered to another thread while create or destroy runs, a
   synchronous fault (`SIGSEGV`, `SIGBUS`, `SIGFPE`, `SIGILL`) raised on
-  the thread running create or destroy, on macOS a crash handler
-  installed with `SA_RESETHAND` that returns from a real fault (the
+  the thread running create or destroy, on macOS a handler installed
+  with `SA_RESETHAND` that returns from a real fault or re-raises a
+  termination signal (the
   platform does not report the flag, research R121), and, on Windows,
   logoff and shutdown events (only services receive them) and a console
   control handler the application registered directly before create (it

@@ -143,8 +143,9 @@ typedef struct OvdTerminalConfig {
      * installs them. Not covered: uncatchable signals, a normal exit
      * without destroy, a signal delivered to another thread while create
      * or destroy runs, a fault raised inside create or destroy, on macOS
-     * a crash handler installed with SA_RESETHAND that returns from a real
-     * fault (it runs again instead of the fault ending the process), and
+     * a handler installed with SA_RESETHAND that returns from a real fault
+     * or re-raises a termination signal (it runs again instead of the
+     * process ending), and
      * on Windows logoff and shutdown (only services receive them) and a
      * console control handler registered directly before create (it runs
      * after the restore). On Windows the C runtime decides the claim: if

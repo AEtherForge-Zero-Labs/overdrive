@@ -430,13 +430,19 @@ static void call_previous(const struct sigaction *action, int signal, siginfo_t 
     } else {
         action->sa_handler(signal);
     }
-    /* A handler that raised its own signal meant to end by it. The signal
-     * is blocked while this handler runs, so it is pending now; were the
-     * slot still Overdrive's, it would come back here and chain again,
-     * forever. macOS does not report SA_RESETHAND when the action is read
-     * (VERIFIED on Darwin 27; R121), so this covers the re-raise pattern
-     * there too. Without SA_RESETHAND the only behavior this changes is
-     * an endless re-raise loop. sigpending is on XSH 2.4.3's list. */
+}
+
+/* After chaining for a crash signal (step 3 only): a crash handler that
+ * raised its own signal meant to end by it. The signal is blocked while
+ * this handler runs, so it is pending now; were the slot still
+ * Overdrive's, it would come back here and chain again, forever. macOS
+ * does not report SA_RESETHAND when the action is read (VERIFIED on
+ * Darwin 27; R121), so this covers the re-raise pattern there too. Not
+ * done for termination signals, where a second one sent while the
+ * application's handler runs is common and must reach that handler
+ * again (FR-032). sigpending and sigismember are on XSH 2.4.3's list. */
+static void reset_if_reraised(int signal)
+{
     sigset_t pending;
     if (sigpending(&pending) == 0 && sigismember(&pending, signal) == 1) {
         struct sigaction default_action = { .sa_handler = SIG_DFL };
@@ -514,6 +520,7 @@ static void on_fatal(int signal, siginfo_t *info, void *context)
     restore_once();
     if (chains) {
         call_previous(previous, signal, info, context);
+        reset_if_reraised(signal);
         errno = saved_errno;
         return;
     }

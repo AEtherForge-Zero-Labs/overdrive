@@ -483,6 +483,47 @@ static bool control_recover(int signal)
     return true;
 }
 
+/* A termination handler that, on its first call, has a second SIGTERM
+ * arrive while it runs (pending: the signal is blocked), as a supervisor
+ * signalling twice would. Both are the application's (FR-032). */
+static volatile sig_atomic_t terms_seen;
+
+static void application_term_twice(int)
+{
+    terms_seen = terms_seen + 1;
+    say('h');
+    if (terms_seen == 1) {
+        kill(getpid(), SIGTERM);
+    }
+}
+
+static bool body_term_twice(bool overdrive)
+{
+    set_action(SIGTERM, application_term_twice);
+    OvdTerminal *terminal = nullptr;
+    if (overdrive && !create(config(true, true), &terminal)) {
+        return false;
+    }
+    kill(getpid(), SIGTERM);
+    if (overdrive) {
+        ovd_terminal_destroy(terminal);
+    }
+    if (terms_seen == 2) {
+        say('2');
+    }
+    return true;
+}
+
+static bool subject_term_twice(int)
+{
+    return body_term_twice(true);
+}
+
+static bool control_term_twice(int)
+{
+    return body_term_twice(false);
+}
+
 /* An SA_RESETHAND crash handler: reports whether the terminal was
  * restored, then returns (parameter 0, the fault repeats under SIG_DFL)
  * or re-raises (parameter 1, the crash-reporter pattern). */
@@ -1149,6 +1190,25 @@ static bool case_recover(int signal)
     return true;
 }
 
+static bool case_term_twice(int)
+{
+    Outcome control;
+    Outcome subject;
+    CHECK(run(&(Run){ .name = "control", .body = control_term_twice, .size = SMALL },
+              &control));
+    CHECK(status_is_exit_0(control.ending.status));
+    CHECK(run(&(Run){ .name = "subject", .body = subject_term_twice, .size = SMALL }, &subject));
+    CHECK(same_status(&subject, &control));
+    CHECK(reported(&subject, '2'));
+    CHECK(modes_restored(&subject));
+    CHECK(count(LITERAL(CAN)) == 1);
+    return true;
+}
+
+/* Set by a case that did not run on this platform; report_case shows it
+ * as skipped, not passed. */
+static bool case_skipped;
+
 /* True if sigaction reports SA_RESETHAND when an action is read back.
  * macOS does not (R121), so Overdrive cannot apply it there, and an
  * SA_RESETHAND handler that returns from a real fault is not covered. */
@@ -1169,7 +1229,8 @@ static bool resethand_reported(void)
 static bool case_oneshot(int parameter)
 {
     if (parameter == 0 && !resethand_reported()) {
-        fprintf(stderr, "skipped: this platform does not report SA_RESETHAND (R121)\n");
+        fprintf(stderr, "this platform does not report SA_RESETHAND (R121)\n");
+        case_skipped = true;
         return true;
     }
     Outcome control;
@@ -1228,8 +1289,10 @@ static bool case_loop(int seed)
 
 static bool report_case(const char *name, int parameter, bool (*body)(int))
 {
+    case_skipped = false;
     const bool ok = body(parameter);
-    fprintf(stderr, "%s (%d): %s\n", name, parameter, ok ? "ok" : "FAILED");
+    fprintf(stderr, "%s (%d): %s\n", name, parameter,
+            !ok ? "FAILED" : case_skipped ? "SKIPPED" : "ok");
     return ok;
 }
 
@@ -1259,6 +1322,7 @@ int main(void)
     for (size_t i = 0; i < sizeof RECOVERABLE / sizeof RECOVERABLE[0]; ++i) {
         ok = report_case("application crash handler returns", RECOVERABLE[i], case_recover) && ok;
     }
+    ok = report_case("second SIGTERM during the application's handler", 0, case_term_twice) && ok;
     ok = report_case("SA_RESETHAND crash handler returns", 0, case_oneshot) && ok;
     ok = report_case("SA_RESETHAND crash handler re-raises", 1, case_oneshot) && ok;
     ok = report_case("actions put back", 0, case_put_back) && ok;

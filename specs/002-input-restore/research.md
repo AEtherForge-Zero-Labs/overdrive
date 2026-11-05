@@ -481,12 +481,18 @@ D1 to D5) has the full reasoning.
   calling it (XSH `sigaction`: the reset happens "on entry to the signal
   handler"). macOS does not report `SA_RESETHAND` when an action is read
   back (VERIFIED on Darwin 27: set `0x4`, read `0`), so there it cannot
-  be applied. To keep the re-raise pattern working everywhere, a signal
-  still pending after the application's handler returns (it raised its
-  own signal) is reset to `SIG_DFL` first; without `SA_RESETHAND` that
-  changes only an endless re-raise loop. Not covered, on macOS: an
-  `SA_RESETHAND` crash handler that returns from a real fault repeats,
-  where without Overdrive the second fault ends the process.
+  be applied. To keep the re-raise pattern working everywhere, a crash
+  signal still pending after the application's crash handler returns
+  (it raised its own signal) is reset to `SIG_DFL` first. Without
+  `SA_RESETHAND` this changes an endless re-raise loop, and a second copy
+  of the same crash signal sent from outside while the handler runs,
+  which then takes the default action. It is not done for termination
+  signals: a second `SIGTERM` or `SIGINT` arriving while the
+  application's handler runs is common and reaches that handler again,
+  as without Overdrive. Not covered, on macOS: an `SA_RESETHAND` crash
+  handler that returns from a real fault repeats, where without
+  Overdrive the second fault ends the process; and an `SA_RESETHAND`
+  termination handler that re-raises its signal runs again instead.
 - On Windows, `SIGABRT` and the exception filter are installed, and
   what they replaced is saved, before the record is armed.
 - The exit sequence in the record is built once, at create, for the
