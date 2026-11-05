@@ -11,8 +11,9 @@ control and predictable performance.
 
 ## Status
 
-**The rendering core is implemented. Version 0.1.0 is experimental:
-every 0.x interface may change.** Feature 1,
+**The rendering core, input, and abnormal-exit restoration are
+implemented. Version 0.1.0 is experimental: every 0.x interface may
+change.** Feature 1,
 [`specs/001-render-core/`](specs/001-render-core/), provides the
 following:
 
@@ -31,10 +32,29 @@ Measured frame costs, with the machine and command, are in
 terminal has been observed yet; see
 [`docs/compatibility.md`](docs/compatibility.md).
 
-Input and abnormal-exit restoration are specified as feature 2,
-[`specs/002-input-restore/`](specs/002-input-restore/), and not
-implemented yet. Layout, motion, and widgets are later features, each
-specified when a consumer needs it.
+Feature 2, [`specs/002-input-restore/`](specs/002-input-restore/),
+provides the following:
+
+- **Input.** It reads keys with modifiers, mouse reports, bracketed
+  paste, focus, and resizes. Events are decoded from untrusted bytes, and
+  `ovd_input_wait` blocks until the next event or a timeout. On the
+  headless backend, `ovd_input_feed` supplies the bytes.
+- **Abnormal-exit restoration.** When the process ends through a signal,
+  a crash, or a closed console, the terminal is restored as destroy would
+  restore it. It is a create option, on by default.
+- **Process-wide handlers.** A system terminal with restoration or input
+  on installs process-wide signal and console handlers. This is the one
+  exception to keeping no process-wide state (FR-036). Headless
+  terminals install none.
+- **Not covered.** Some ends can't be restored: `SIGKILL`, power loss,
+  and `exit` without destroy, among others. FR-034 in the
+  [spec](specs/002-input-restore/spec.md) lists them, and
+  `terminal.h` repeats the list at `restore_on_exit`.
+
+The pty tests show restoration on Linux and macOS. Windows has been
+built, but its input and restoration have not been run outside Wine; see
+[`docs/compatibility.md`](docs/compatibility.md). Layout, motion, and
+widgets are later features, each specified when a consumer needs it.
 
 ## Build
 
@@ -67,7 +87,13 @@ target_link_libraries(myapp PRIVATE overdrive::overdrive)
 The API is in [`include/overdrive/`](include/overdrive/):
 - `core.h`: results, sizes, rects, version;
 - `terminal.h`: terminals, configuration, allocator;
-- `render.h`: colors, styles, frames, drawing.
+- `render.h`: colors, styles, frames, drawing;
+- `input.h`: events, wait, feed.
+
+The examples, built with `OVERDRIVE_BUILD_EXAMPLES`, are
+`hello_overdrive` (rendering) and `input_demo` (input and restoration).
+[`docs/validation/manual-checklist.md`](docs/validation/manual-checklist.md)
+says how to check them by hand in a real terminal.
 
 ## Contributing
 

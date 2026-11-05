@@ -1,6 +1,7 @@
 # Overdrive Architecture
 
-> **Status: implemented (feature `001-render-core`), experimental 0.x.**
+> **Status: implemented (features `001-render-core` and
+> `002-input-restore`), experimental 0.x.**
 > This describes the code on `main`. Every number below is a measurement,
 > cited with how it was taken (Art. XV). Behavior in real terminals is not
 > yet observed; see [compatibility.md](compatibility.md).
@@ -17,10 +18,13 @@ flowchart TB
         core["core.h<br/>OvdResult · OvdSize · OvdRect · version"]
         term["terminal.h<br/>OvdTerminal · config · lifecycle · allocator"]
         render["render.h<br/>OvdColor · OvdStyle · frames · OvdCanvas · boxes"]
+        inputh["input.h<br/>OvdEvent · wait · feed"]
     end
     subgraph lib["liboverdrive — src/"]
         terminal["terminal.c<br/>create/destroy, frame state machine"]
-        system["terminal_system.c<br/>system backend: enter/exit sequences, size, write"]
+        system["terminal_system.c<br/>system backend: enter/exit sequences, size, write, read, restoration"]
+        input["input.c<br/>wait, feed, event queue"]
+        decode["decode.c<br/>bytes → events"]
         box["box.c<br/>borders, through the canvas API"]
         canvas["canvas.c<br/>drawing, clipping"]
         buffer["buffer.c<br/>cell grid, wide-glyph invariant"]
@@ -36,6 +40,9 @@ flowchart TB
     public --> terminal
     public --> canvas
     public --> box
+    public --> input
+    input --> system
+    input --> decode --> unicode
     box --> canvas
     terminal --> system
     terminal --> diff
@@ -113,7 +120,90 @@ The size read in the first step works differently per backend:
   5. it writes the enter sequence.
 
   A failure undoes the completed steps in reverse. Destroy writes the
-  exit sequence and restores the modes it read (R26).
+  exit sequence and restores the modes it read (R26). With input on,
+  create also puts stdin in raw mode, and with `restore_on_exit` it arms
+  the restoration record described below; destroy undoes both.
+
+## Input
+
+Feature 002, research R102 to R111.
+
+- **Decoder (`decode.c`).** It decodes bytes from the terminal, which
+  are untrusted, in two layers (R104):
+  1. ECMA-48 syntax: C0 controls, `ESC` sequences, SS3, and CSI with
+     bounded parameters;
+  2. a dispatch table that names keys, mouse reports, paste markers, and
+     focus.
+
+  A sequence the table does not name is discarded, and no input byte is
+  ever written to the terminal (FR-019). The decoder keeps the partial
+  sequence between calls, reads no clock (time is an argument), and
+  allocates nothing.
+- **Escape delay.** A lone `ESC` becomes the Escape key after
+  `escape_delay_ms`, 50 ms by default (R109).
+- **Wait (`input.c`).** `ovd_input_wait` returns one event, or reports a
+  timeout as success (R102). An event already decoded is returned
+  without blocking. The system backend blocks on stdin; on POSIX, a
+  `SIGWINCH` handler reports resizes. The headless backend reads the
+  bytes given to `ovd_input_feed`, on a virtual clock.
+- **Allocation.** Input's buffers are allocated at create only. Reading
+  input makes no allocator calls afterwards (SC-004; see
+  Measurements).
+
+## Abnormal-exit restoration
+
+Feature 002, research R112, R113, and R121. With `restore_on_exit` on
+(the default), a system terminal restores the terminal when the process
+ends through a signal, a crash, or a closed console, as destroy would
+restore it.
+
+- **Process-wide state.** The handlers, and the record they read, are
+  process-wide. This is the one exception to 001 FR-002 (FR-036), and
+  `terminal.h` documents it at the create options. Only one system
+  terminal owns the record. Headless terminals install no handler and
+  keep no process-wide state.
+- **The record.** It holds the modes to restore and the exit sequence,
+  built at create. Its atomic state goes `IDLE` → `ARMED` → `CLAIMED` →
+  `DONE`, so restoration runs at most once, whichever of destroy, a
+  signal, or a crash comes first (FR-033).
+- **POSIX.** One `sigaction` handler covers `SIGHUP`, `SIGINT`,
+  `SIGQUIT`, `SIGTERM`, `SIGABRT`, `SIGSEGV`, `SIGBUS`, `SIGFPE`, and
+  `SIGILL`. It uses async-signal-safe calls only.
+  - A signal that was ignored before create stays ignored.
+  - For a termination signal the application already handles, the
+    application keeps it: Overdrive calls the application's handler and
+    restores nothing.
+  - Otherwise, the handler restores once. Then it calls the application's
+    handler, if there is one, and returns. If there is none, it re-raises
+    the signal under the default action, so the exit status stays the
+    same as without Overdrive.
+- **Windows (R113, option B).** Restoration runs from three handlers:
+  - a console control handler, for Ctrl+C (only while input is off),
+    Ctrl+Break, and closing the console;
+  - an unhandled-exception filter;
+  - a `SIGABRT` handler.
+
+  The filter and the `SIGABRT` handler chain to what they replaced. The
+  console handler returns without handling the event, so the next
+  console handler still runs. The C runtime's own console handler
+  decides whether the application has claimed Ctrl+C and Ctrl+Break.
+- **Destroy** puts back each handler that is still Overdrive's. A
+  handler the application installed after create stays in place.
+- **Not covered (FR-034).**
+  - Uncatchable ends: `SIGKILL` and power loss.
+  - A normal exit without destroy: `exit`, or returning from `main`.
+  - Modes another program changed.
+  - While create or destroy runs: a signal delivered to another thread,
+    or a synchronous fault (`SIGSEGV`, `SIGBUS`, `SIGFPE`, `SIGILL`) on
+    the thread running it.
+  - On macOS, an application handler installed with `SA_RESETHAND` that
+    returns from a real fault or re-raises a termination signal, because
+    the platform does not report the flag (R121).
+  - On Windows, logoff and shutdown, and a console handler the
+    application registered directly before create.
+
+  The spec gives the full list, and `terminal.h` repeats it at
+  `restore_on_exit`.
 
 ## Ownership
 
@@ -165,11 +255,30 @@ case, the bottom-right cell of a 999×999 terminal with RGB colors and a
 4-byte glyph, measured 54. No SC-008 time target is set yet; this is the
 first measurement.
 
+### Input and restoration
+
+These are counts that the tests print, not times. They come from the
+`debug` preset, run on 2026-11-05 on the same machine.
+
+| Test | What it prints |
+|---|---|
+| `test_decode_fuzz` | 10⁷ bytes in all: 5000118 with a paste text capacity of 8 bytes and 5000091 with 256, with every decoder invariant holding after every call (SC-002) |
+| `test_steady_state` | 0 allocator calls over 10000 headless feed and wait calls with input on (SC-004) |
+| `test_restore_pty` | 8 runs of create and destroy in a loop, each ended by `SIGTERM` after a seeded delay of 3 to 138 ms. They made 13 to 1597 enters each, and each run had exactly as many exits. The counts depend on the machine's speed. |
+
+No input latency is measured. The timing case of `test_system_pty`
+checks bounds (SC-005), and prints numbers only when it fails:
+- a byte written during a wait arrives within 1 s;
+- a lone `ESC` resolves no sooner than the escape delay, and within 1 s
+  after it.
+
 ## Not in this architecture (yet)
 
-`OVD-IDENTITY-001` §4 names Input, Layout, Motion, and Widgets, but
-feature 001 has no present requirement for them (Art. VII). Input,
-with abnormal-exit restoration, is feature 002 because the first
-consumer needs it; it is specified in
-[`specs/002-input-restore/`](../specs/002-input-restore/) and not
-implemented.
+`OVD-IDENTITY-001` §4 names Input, Layout, Motion, and Widgets. Input
+is implemented, with abnormal-exit restoration, as feature 002
+([`specs/002-input-restore/`](../specs/002-input-restore/)), because the
+first consumer needs it. Layout, Motion, and Widgets have no present
+requirement yet (Art. VII).
+
+The decoder reads no inline image protocols (kitty graphics, sixel).
+Its dispatch table can gain such entries when a feature specifies them.
