@@ -162,3 +162,6 @@ option(OVERDRIVE_BUILD_BENCHMARKS "Build Overdrive's benchmarks" OFF)
 if(OVERDRIVE_BUILD_BENCHMARKS)
     add_subdirectory(bench)
 endif()
+
+# Input decoder (OVD-16, R104).
+target_sources(overdrive PRIVATE src/decode.c)
