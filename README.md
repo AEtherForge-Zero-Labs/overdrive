@@ -42,8 +42,9 @@ provides the following:
 - **Abnormal-exit restoration.** When the process ends through a signal,
   a crash, or a closed console, the terminal is restored as destroy would
   restore it. It is a create option, on by default.
-- **Process-wide handlers.** A system terminal with restoration or input
-  on installs process-wide signal and console handlers. This is the one
+- **Process-wide handlers.** A system terminal with restoration on
+  installs process-wide signal and console handlers. On POSIX, input on
+  also installs a `SIGWINCH` handler for resizes. This is the one
   exception to keeping no process-wide state (FR-036). Headless
   terminals install none.
 - **Not covered.** Some ends can't be restored: `SIGKILL`, power loss,
@@ -51,8 +52,9 @@ provides the following:
   [spec](specs/002-input-restore/spec.md) lists them, and
   `terminal.h` repeats the list at `restore_on_exit`.
 
-The pty tests show restoration on Linux and macOS. Windows has been
-built, but its input and restoration have not been run outside Wine; see
+The pty tests show restoration on Linux and macOS. Windows input and
+restoration are cross-built but not run: Wine runs only the headless
+tests and the redirected-stdout path. See
 [`docs/compatibility.md`](docs/compatibility.md). Layout, motion, and
 widgets are later features, each specified when a consumer needs it.
 
