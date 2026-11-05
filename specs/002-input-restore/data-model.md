@@ -76,11 +76,21 @@ csi --"200~"--> paste --"ESC[201~"--> ground
 
 ### Restoration record (src/platform, static storage, R112, R113)
 
-One per process. Fields: `state` (lock-free atomic), the exit sequence
-bytes and length (fixed buffer, CAN first), the saved input modes
-(termios, or the Windows console modes and code page), and the previous
-handler of each handled signal (POSIX `struct sigaction`, Windows the
-previous unhandled-exception filter).
+One per process. Fields:
+- `state` (lock-free atomic) and `owned` (lock-free atomic bool, taken
+  by the first system terminal with `restore_on_exit` at create, given
+  up at destroy or on a failed create; R121);
+- the exit sequence bytes and length (fixed buffer of 96, CAN first);
+- POSIX: the termios read before echo was turned off, when that step
+  ran; the previous `struct sigaction` of each handled signal and
+  whether Overdrive's was installed; the handled set and the owner's
+  thread mask;
+- Windows: the console output mode, code page, and input mode read
+  before create changed them, with the steps that ran; whether the
+  console control handler is registered; the previous `SIGABRT` handler
+  and unhandled-exception filter. No `SIGINT` or `SIGBREAK` disposition
+  is saved: under R113's option B the C runtime's own console handler
+  applies it.
 
 State transitions (R112):
 

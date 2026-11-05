@@ -207,9 +207,9 @@ use lock-free atomic objects (as 001 R48 relies on).
 signals blocked in the calling thread (`pthread_sigmask`) from its first
 mode change to its last step, so a signal arriving on that thread is
 delivered only once the record is armed:
-1. if the state is not `IDLE`, another system terminal owns the record
-   (001 R29): this one registers nothing, and the state before the first
-   create is what gets restored (spec edge case);
+1. take ownership of the record (an `atomic_bool`, R121); if another
+   system terminal owns it (001 R29), this one registers nothing, and the
+   state before the first create is what gets restored (spec edge case);
 2. fill the record: the termios to restore, the exit sequence bytes
    (R116), and the previous `sigaction` of each handled signal;
 3. store `ARMED` (release), then install the handler with `sigaction`
@@ -268,38 +268,58 @@ it is already claimed, without waiting: a signal on another thread would
 end the process while destroy is half-way. `sigprocmask`: unspecified in
 a multi-threaded process ([POSIX] `sigprocmask`; ASSUMED wording).
 
-**R113 — Windows abnormal-exit restoration.** `SetConsoleCtrlHandler`
-for `CTRL_C_EVENT`, `CTRL_BREAK_EVENT`, and `CTRL_CLOSE_EVENT`; the
-handler restores (write exit sequence, `SetConsoleMode` both handles,
-`SetConsoleOutputCP`) and returns FALSE so the next handler or the
-default runs (ASSUMED [MS-CTRL]: the handler runs on a new thread;
-handlers run last-registered first; returning FALSE passes the event
-on). `CTRL_C_EVENT` arrives only while input is off: with input on,
+**R113 — Windows abnormal-exit restoration (option B).**
+`SetConsoleCtrlHandler` for `CTRL_C_EVENT`, `CTRL_BREAK_EVENT`, and
+`CTRL_CLOSE_EVENT`; the handler restores once (R112's record: write the
+exit sequence, then the input mode, code page, and output mode, in
+destroy's order) and returns FALSE, so the next handler or the default
+runs (ASSUMED [MS-CTRL]: the handler runs on a new thread; handlers run
+last-registered first; returning FALSE passes the event on).
+`CTRL_C_EVENT` arrives only while input is off: with input on,
 `ENABLE_PROCESSED_INPUT` is clear and Ctrl+C is input (R107).
-Claim rule (spec FR-032): at create, Overdrive reads the C runtime's
-`SIGINT` and `SIGBREAK` dispositions (`signal` returns the previous one,
-which is put back at once; ASSUMED); for Ctrl+C or Ctrl+Break whose
-disposition was an application handler, Overdrive's handler restores
-nothing and returns FALSE, so the runtime's handler runs. A handler the
-application registered with `SetConsoleCtrlHandler` before create is
-invisible: it runs after Overdrive has restored (spec FR-034). A
-runtime handler installed after create registers after Overdrive's and
-runs first.
+Claim rule (spec FR-032), option B (the owner's decision on the issue
+that implemented it): right after registering its own handler, create
+calls `signal(s, SIG_DFL)` and puts the returned action back, for
+`SIGINT` and `SIGBREAK`. The disposition is unchanged, but Microsoft's
+UCRT registers its own console handler, `ctrlevent_capture`, on the
+first `signal()` call for either signal, whatever the action (VERIFIED:
+UCRT `misc/signal.cpp`, read from the ReactOS mirror, lines 312–323).
+Registered later, the runtime's handler runs first. `ctrlevent_capture`
+(same file, lines 163–211, VERIFIED) maps `CTRL_C_EVENT` to `SIGINT` and
+every other event to `SIGBREAK`, then: for `SIG_DFL` returns FALSE, so
+Overdrive's handler restores; for `SIG_IGN` returns TRUE; for an
+application handler resets the action to `SIG_DFL`, calls it, and
+returns TRUE, so nothing is restored. The runtime enforces the claim
+rule; Overdrive saves no `SIGINT` or `SIGBREAK` disposition.
+Limits (spec FR-034):
+- if the application called `signal()` for `SIGINT` or `SIGBREAK`
+  before create, the runtime's handler was registered first and runs
+  after Overdrive's: Ctrl+C and Ctrl+Break then restore even when the
+  application handles them;
+- an application `SIGBREAK` handler also claims `CTRL_CLOSE_EVENT`;
+- during the round trip the action is briefly `SIG_DFL`: a Ctrl+C in
+  that instant is not claimed by the application;
+- a handler the application registered with `SetConsoleCtrlHandler`
+  before create is invisible: it runs after Overdrive has restored;
+- msvcrt.dll's `signal()` is not checked (UNVERIFIED); the supported
+  native toolchain, MSYS2 UCRT64, links the UCRT.
 `CTRL_LOGOFF_EVENT` and `CTRL_SHUTDOWN_EVENT` are not registered: only
 services receive them (ASSUMED [MS-CTRL] HandlerRoutine; spec FR-034).
-Crashes:
-`SetUnhandledExceptionFilter`, saving and chaining the previous filter,
-and the CRT `signal(SIGABRT, …)` for `abort` (ASSUMED). R112's record
-and state machine are shared: the console handler runs on its own
-thread, so a `CLAIMED` state held by destroy is waited for, never
-skipped. The handler may still interleave with a frame write on the
-main thread; the exit sequence's CAN prefix (R112) cancels a sequence
-cut in half, and the checklist observes the result. Create installs the
-console handler with `SetConsoleCtrlHandler` only after `ARMED`; destroy
-removes it (`SetConsoleCtrlHandler(handler, FALSE)`) and restores the
-previous exception filter only if the current one is still Overdrive's
-(ASSUMED: `SetUnhandledExceptionFilter` returns the previous filter, so
-the check is a second call that puts the observed one back).
+Crashes: `SetUnhandledExceptionFilter`, saving the previous filter and
+returning its result (or `EXCEPTION_CONTINUE_SEARCH` without one), and
+`signal(SIGABRT, …)` for `abort`, calling a previous handler that is a
+function; a `SIGABRT` ignored before create is put back and nothing is
+installed. R112's state machine is shared: the console handler runs on
+its own thread, so a `CLAIMED` state held by destroy is waited for,
+never skipped. The handler may still interleave with a frame write on
+the main thread; the exit sequence's CAN prefix (R112) cancels a
+sequence cut in half, and the checklist observes the result. Destroy
+removes the console handler (`SetConsoleCtrlHandler(handler, FALSE)`),
+then puts back the `SIGABRT` action and the exception filter; each call
+returns what it replaced, and when that is not Overdrive's (the
+application replaced it after create) it is put back with a second
+call. No Windows path is run in a real console here (UNVERIFIED until
+the manual checklist).
 
 **R114 — Allocation.** Create allocates, through the terminal's
 allocator, the input queue (R110; on the system backend the read
@@ -430,6 +450,24 @@ R111, R112, and R116 leave these open. Each is the narrowest reading
   reverse of the enter order, autowrap on, cursor shown, then leaving
   the alternate screen or moving to the last row. Every system exit
   sequence starts with CAN, with input on or off.
+
+**R121 — Restoration details decided at implementation.** R112 and R113
+leave these open. Each is the narrowest reading (Art. IX); the archived
+change `openspec/changes/archive/2026-11-05-i56-abnormal-exit/` (design
+D1 to D5) has the full reasoning.
+- Ownership is a separate `atomic_bool`, taken at create before the
+  first mode change and given up at destroy or on a failed create. A
+  `FILLING` state was rejected: a handler finding a state that never
+  reaches `DONE` could spin forever.
+- Overdrive's POSIX action keeps the previous action's `SA_RESTART` and
+  `SA_ONSTACK`, and blocks the previous action's `sa_mask` plus every
+  handled signal. A previous action that is already Overdrive's (an
+  earlier destroy could not put it back) is treated as `SIG_DFL`, so the
+  handler never chains to itself. A previous action that cannot be read
+  is left alone, as if ignored.
+- The exit sequence in the record is built once, at create, for the
+  size read then: without the alternate screen it moves to create's last
+  row, which after a resize may differ from the row destroy would pick.
 
 ## C. Tensions
 

@@ -318,7 +318,12 @@ decoder exists.
   the thread running create or destroy, and, on Windows, logoff and
   shutdown events (only services receive them) and a console control
   handler the application registered directly before create (it runs
-  after Overdrive has restored).
+  after Overdrive has restored). On Windows the C runtime's console
+  handler decides the claim (research R113): when the application set a
+  C runtime handler for Ctrl+C or Ctrl+Break before create, those keys
+  restore even though it handles them; an application Ctrl+Break handler
+  also claims console close; and a Ctrl+C arriving during create may
+  miss the application's handler.
 - **FR-035**: Abnormal-exit restoration MUST be a create option of the
   system backend, on by default; turned off, create MUST install no
   abnormal-exit handler. Input's `SIGWINCH` handler (FR-036) belongs to

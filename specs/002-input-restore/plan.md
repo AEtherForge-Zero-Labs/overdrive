@@ -112,7 +112,7 @@ unchanged and listed for completeness.
 | Alternate screen, cursor hidden, autowrap off | enter sequence (001) | exit sequence, handler |
 | Mouse 1002 + 1006, paste 2004, focus 1004 | enter sequence, each only if on | exit sequence (reverse order, only those on), handler |
 | POSIX self-pipe, `SIGWINCH` handler | new step 4c, after raw input, with `input`; process-wide, shared by every system terminal with input on | destroy (before raw input): the last user puts the previous action back if the current one is still Overdrive's, then closes the pipe |
-| Signal / console-control handlers, exception filter | last step, with `restore_on_exit`; handled signals blocked in the calling thread for all of create | destroy, after its restore: each slot still holding Overdrive's handler gets the previous one back, then the record is disarmed (R112) |
+| Signal / console-control handlers, exception filter | record reserved after step 1 (POSIX: handled signals blocked in the calling thread from then on), armed and handlers installed as the last step, with `restore_on_exit` (R112, R113, R121) | destroy, after its restore: each slot still holding Overdrive's handler gets the previous one back, then the record is disarmed and given up (R112); a failed create gives it up unarmed |
 
 A failed create undoes every completed step in reverse (001 FR-011).
 

@@ -117,6 +117,53 @@ typedef enum OvdPlatformReady : uint32_t {
  * resolution is the system timer's, typically 10 to 16 ms. */
 [[nodiscard]] uint64_t ovd_platform_clock_ms(void);
 
+/* ---- Abnormal-exit restoration (002 R112, R113, FR-030 to FR-036) ---- */
+
+/* The largest exit sequence the record holds (CAN first). terminal_system.c
+ * checks that its own fit. */
+#define OVD_PLATFORM_EXIT_MAX ((size_t)96)
+
+/* One process-wide restoration record, owned by the first system terminal
+ * with restore_on_exit that reserves it (data-model, Restoration record).
+ * Its state machine is IDLE -> ARMED -> CLAIMED -> DONE -> IDLE: the one
+ * that moves ARMED to CLAIMED, a handler or destroy, restores, so
+ * restoration runs at most once (FR-033). The calls below are made by the
+ * thread creating or destroying the owning terminal, in this order:
+ * reserve, then arm or release; claim, then disarm.
+ *
+ * Takes the record if no terminal owns it, storing true in *owner, or
+ * stores false and changes nothing. On POSIX the owner's calling thread
+ * then has the handled signals blocked until arm or release, so one that
+ * arrives meanwhile is delivered once the record is armed (R112).
+ * OVD_ERROR_PLATFORM, taking nothing, if the mask cannot be set;
+ * OVD_ERROR_INVALID_ARGUMENT for nullptr. */
+[[nodiscard]] OvdResult ovd_platform_restore_reserve(bool *owner);
+
+/* Create's last step, for the owner: records what to restore (the modes
+ * *modes recorded as read before they changed, and the exit sequence,
+ * truncated to OVD_PLATFORM_EXIT_MAX bytes), arms the record, installs the
+ * handlers (POSIX: each FR-030 signal not ignored before create; Windows:
+ * the console control handler, then the C runtime's after it, abort, and
+ * the unhandled-exception filter), and unblocks. A handler that cannot be
+ * installed is skipped. */
+void ovd_platform_restore_arm(const OvdPlatformModes *modes, const char *exit, size_t length);
+
+/* For the owner, when create fails after reserve and before arm: unblocks
+ * and gives the record up. */
+void ovd_platform_restore_release(void);
+
+/* Destroy's first step, for the owner: blocks the handled signals (POSIX)
+ * and takes the restore. True if the caller must now restore (write the
+ * exit sequence and undo the modes); false if a handler restored already,
+ * after waiting for it to finish. */
+[[nodiscard]] bool ovd_platform_restore_claim(void);
+
+/* Destroy's last step, for the owner, after the caller's restore: marks
+ * the restore done if claimed, puts back each handler whose slot still
+ * holds Overdrive's (one the application installed after create stays,
+ * FR-032), returns the record to IDLE, unblocks, and gives it up. */
+void ovd_platform_restore_disarm(bool claimed);
+
 /* True if *modes records that Windows virtual-terminal output was
  * enabled; always false on POSIX and for nullptr. This is the "Windows
  * with VT enabled" input of R10 (detect.h). */

@@ -14,7 +14,13 @@
  *   for WriteFile;
  * - .../win32/api/synchapi/nf-synchapi-waitforsingleobject and
  *   .../win32/api/sysinfoapi/nf-sysinfoapi-gettickcount64;
- * - ISO C for getenv.
+ * - for abnormal-exit restoration (002 R112, R113 option B):
+ *   .../windows/console/setconsolectrlhandler and handlerroutine, and
+ *   .../win32/api/errhandlingapi/nf-errhandlingapi-setunhandledexceptionfilter;
+ *   the C runtime's signal() behavior is read from Microsoft's UCRT source,
+ *   misc/signal.cpp (R113), which the MinGW UCRT64 toolchain links; msvcrt
+ *   is not checked;
+ * - ISO C for getenv, signal, and abort.
  * Observed only under Wine, which is not Windows (baseline); behavior in
  * Windows Terminal and the console host is checked by hand (OVD-12, and
  * for input the 002 manual checklist).
@@ -23,6 +29,8 @@
 
 #include "platform.h"
 
+#include <signal.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <windows.h>
@@ -206,6 +214,227 @@ void ovd_platform_leave(OvdPlatformModes *modes)
 bool ovd_platform_virtual_terminal(const OvdPlatformModes *modes)
 {
     return modes != nullptr && (modes->steps & STEP_OUTPUT_MODE) != 0;
+}
+
+/* ---- Abnormal-exit restoration (002 R112, R113 option B) ------------- */
+
+typedef enum RestoreState : int {
+    RESTORE_IDLE = 0,
+    RESTORE_ARMED,
+    RESTORE_CLAIMED,
+    RESTORE_DONE,
+} RestoreState;
+
+/* A C signal handler, as ISO C 7.14.1.1's signal takes and returns it. */
+typedef void (*SignalHandler)(int);
+
+/* The handlers run on other threads (a console control handler runs "in a
+ * new thread" per HandlerRoutine) or inside abort, so the state and owner
+ * are lock-free atomics, as on POSIX. */
+static_assert(ATOMIC_INT_LOCK_FREE == 2 && ATOMIC_BOOL_LOCK_FREE == 2,
+              "the restoration record's atomics must be lock-free");
+
+/* The record (data-model, Restoration record). state and owned are atomic;
+ * the other fields are written only by the owner's creating or destroying
+ * thread while state is IDLE, published by arm's release store of ARMED,
+ * and read by handlers after an acquire load. Under option B no SIGINT or
+ * SIGBREAK action is saved: the round trip in arm leaves them as they
+ * were. */
+static atomic_int restore_state = RESTORE_IDLE;
+static atomic_bool restore_owned = false;
+static struct {
+    char exit[OVD_PLATFORM_EXIT_MAX];
+    size_t exit_length;
+    Saved modes;        /* the values read before create changed them */
+    uint32_t steps;     /* the R28 steps create completed */
+    bool console;       /* on_console is registered */
+    bool abort_handler; /* on_abort was installed for SIGABRT */
+    SignalHandler previous_abort;
+    bool filter; /* on_exception was installed */
+    LPTOP_LEVEL_EXCEPTION_FILTER previous_filter;
+} record;
+
+/* Writes the record's exit sequence, then puts the console back in
+ * destroy's order (input mode, code page, output mode), once (FR-033). If
+ * another thread holds CLAIMED, waits for it to finish. */
+static void restore_once(void)
+{
+    int expected = RESTORE_ARMED;
+    if (atomic_compare_exchange_strong_explicit(&restore_state, &expected, RESTORE_CLAIMED,
+                                                memory_order_acq_rel, memory_order_acquire)) {
+        /* As ovd_platform_write, stopping at a failure, which a handler
+         * cannot report (R28): the modes still go back. exit_length is at
+         * most OVD_PLATFORM_EXIT_MAX, so it fits a DWORD. */
+        HANDLE output = standard_handle(STD_OUTPUT_HANDLE);
+        size_t written = 0;
+        while (output != nullptr && written < record.exit_length) {
+            DWORD step = 0;
+            if (WriteFile(output, record.exit + written, (DWORD)(record.exit_length - written),
+                          &step, nullptr)
+                    == 0
+                || step == 0) {
+                break;
+            }
+            written += step;
+        }
+        /* The input mode read before echo was turned off is the one from
+         * before raw input too (R107), so it alone restores stdin. */
+        restore(&record.modes, record.steps & ~(uint32_t)STEP_RAW_INPUT);
+        atomic_store_explicit(&restore_state, RESTORE_DONE, memory_order_release);
+        return;
+    }
+    while (expected == RESTORE_CLAIMED) {
+        expected = atomic_load_explicit(&restore_state, memory_order_acquire);
+    }
+}
+
+/* HandlerRoutine: "If the function handles the control signal, it should
+ * return TRUE. If it returns FALSE, the next handler function in the list
+ * of handlers for this process is used." Returning FALSE after restoring
+ * leaves the process to end as it would have. The C runtime's own handler
+ * runs first when it was registered later (option B; R113), and returns
+ * TRUE, so this one is not reached, when the application handles or
+ * ignores the signal. */
+static BOOL WINAPI on_console(DWORD type)
+{
+    if (type == CTRL_C_EVENT || type == CTRL_BREAK_EVENT || type == CTRL_CLOSE_EVENT) {
+        if (atomic_load_explicit(&restore_state, memory_order_acquire) != RESTORE_IDLE) {
+            restore_once();
+        }
+    }
+    return FALSE;
+}
+
+/* abort's SIGABRT: restore, then the application's handler, if any. The
+ * runtime resets the action to SIG_DFL before calling a handler, and abort
+ * ends the process when the handler returns (ISO C 7.22.4.1, 7.14.1.1). */
+static void on_abort(int signal)
+{
+    if (atomic_load_explicit(&restore_state, memory_order_acquire) == RESTORE_IDLE) {
+        return;
+    }
+    restore_once();
+    const SignalHandler previous = record.previous_abort;
+    if (previous != SIG_DFL && previous != SIG_IGN && previous != SIG_ERR && previous != nullptr) {
+        previous(signal);
+    }
+}
+
+/* An unhandled exception (SetUnhandledExceptionFilter): restore, then what
+ * the previous filter decides, or EXCEPTION_CONTINUE_SEARCH, the default
+ * handling, without one. */
+static LONG WINAPI on_exception(EXCEPTION_POINTERS *info)
+{
+    if (atomic_load_explicit(&restore_state, memory_order_acquire) == RESTORE_IDLE) {
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+    restore_once();
+    const LPTOP_LEVEL_EXCEPTION_FILTER previous = record.previous_filter;
+    return previous != nullptr ? previous(info) : EXCEPTION_CONTINUE_SEARCH;
+}
+
+/* The round trip of option B (R113): the first signal() call for SIGINT
+ * or SIGBREAK makes the C runtime register its console control handler
+ * (UCRT misc/signal.cpp); putting the previous action back leaves the
+ * disposition as it was. */
+static void register_runtime_handler(int signal_number)
+{
+    const SignalHandler previous = signal(signal_number, SIG_DFL);
+    if (previous != SIG_ERR) {
+        signal(signal_number, previous);
+    }
+}
+
+OvdResult ovd_platform_restore_reserve(bool *owner)
+{
+    if (owner == nullptr) {
+        return OVD_ERROR_INVALID_ARGUMENT;
+    }
+    *owner = !atomic_exchange(&restore_owned, true);
+    return OVD_OK;
+}
+
+void ovd_platform_restore_arm(const OvdPlatformModes *modes, const char *exit, size_t length)
+{
+    record.exit_length = length < sizeof record.exit ? length : sizeof record.exit;
+    if (exit != nullptr) {
+        memcpy(record.exit, exit, record.exit_length);
+    } else {
+        record.exit_length = 0;
+    }
+    record.steps = modes != nullptr ? modes->steps : 0;
+    if (modes != nullptr) {
+        memcpy(&record.modes, modes->saved, sizeof record.modes);
+    }
+    atomic_store_explicit(&restore_state, RESTORE_ARMED, memory_order_release);
+
+    /* Overdrive's console handler first, then the runtime's after it, so
+     * the runtime's runs first (handlers are called last-registered first;
+     * ASSUMED from SetConsoleCtrlHandler's "list of handler functions"). */
+    record.console = SetConsoleCtrlHandler(on_console, TRUE) != 0;
+    register_runtime_handler(SIGINT);
+    register_runtime_handler(SIGBREAK);
+
+    /* A SIGABRT ignored before create stays ignored (FR-032). */
+    const SignalHandler previous = signal(SIGABRT, on_abort);
+    record.abort_handler = previous != SIG_ERR;
+    record.previous_abort = previous == on_abort ? SIG_DFL : previous;
+    if (record.abort_handler && previous == SIG_IGN) {
+        signal(SIGABRT, SIG_IGN);
+        record.abort_handler = false;
+    }
+
+    const LPTOP_LEVEL_EXCEPTION_FILTER filter = SetUnhandledExceptionFilter(on_exception);
+    record.previous_filter = filter == on_exception ? nullptr : filter;
+    record.filter = true;
+}
+
+void ovd_platform_restore_release(void)
+{
+    atomic_store(&restore_owned, false);
+}
+
+bool ovd_platform_restore_claim(void)
+{
+    int expected = RESTORE_ARMED;
+    if (atomic_compare_exchange_strong_explicit(&restore_state, &expected, RESTORE_CLAIMED,
+                                                memory_order_acq_rel, memory_order_acquire)) {
+        return true;
+    }
+    while (expected == RESTORE_CLAIMED) {
+        expected = atomic_load_explicit(&restore_state, memory_order_acquire);
+    }
+    return false;
+}
+
+void ovd_platform_restore_disarm(bool claimed)
+{
+    if (claimed) {
+        atomic_store_explicit(&restore_state, RESTORE_DONE, memory_order_release);
+    }
+    if (record.console) {
+        SetConsoleCtrlHandler(on_console, FALSE);
+        record.console = false;
+    }
+    /* Each one goes back only if it is still Overdrive's; one the
+     * application installed after create stays (FR-032). */
+    if (record.abort_handler) {
+        const SignalHandler current = signal(SIGABRT, record.previous_abort);
+        if (current != on_abort && current != SIG_ERR) {
+            signal(SIGABRT, current);
+        }
+        record.abort_handler = false;
+    }
+    if (record.filter) {
+        const LPTOP_LEVEL_EXCEPTION_FILTER current
+            = SetUnhandledExceptionFilter(record.previous_filter);
+        if (current != on_exception) {
+            SetUnhandledExceptionFilter(current);
+        }
+        record.filter = false;
+    }
+    atomic_store_explicit(&restore_state, RESTORE_IDLE, memory_order_release);
+    atomic_store(&restore_owned, false);
 }
 
 /* ---- Input (002 R107, R109) ------------------------------------------ */

@@ -145,7 +145,12 @@ typedef struct OvdTerminalConfig {
      * or destroy runs, a fault raised inside create or destroy, and on
      * Windows logoff and shutdown (only services receive them) and a
      * console control handler registered directly before create (it runs
-     * after the restore). False installs none of these; input's SIGWINCH
+     * after the restore). On Windows the C runtime decides the claim: if
+     * the application called signal() for SIGINT or SIGBREAK before
+     * create, Ctrl+C and Ctrl+Break restore even when it handles them; a
+     * SIGBREAK handler also claims console close; and a Ctrl+C arriving
+     * while create runs may not reach the application's handler. False
+     * installs none of these; input's SIGWINCH
      * handler is separate. Set false if the application manages these
      * signals itself. */
     bool restore_on_exit;
