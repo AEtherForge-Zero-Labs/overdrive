@@ -50,6 +50,27 @@ Platform packages:
 Select a compiler with `CC` or a git-ignored `CMakeUserPresets.json`; the
 shared presets leave discovery to CMake.
 
+## Sanitizers (the `sanitize` preset)
+
+The `sanitize` preset builds with AddressSanitizer and
+UndefinedBehaviorSanitizer and stops at the first report. Its runtimes
+come with the compiler, so it adds no separate tool, but not every
+compiler on the list above ships them for every platform:
+
+| Platform | Compiler | Runtime |
+|---|---|---|
+| Linux | GCC 14 | `libasan` and `libubsan`, installed with the `gcc-14` package on Ubuntu 24.04 |
+| macOS | Apple Clang | the compiler's own sanitizer runtime (Xcode Command Line Tools) |
+
+CI runs the preset on exactly these two. Homebrew GCC on macOS is not
+used for it. Windows (MinGW-w64 under Wine) is not part of the sanitizer
+path.
+
+The sanitize test preset leaves out `check_exports` on the library.
+AddressSanitizer adds its own global symbols to the instrumented archive
+(`asan_globals_registered`, for example), which that check would report
+as non-`ovd_` exports. Every other preset runs it.
+
 ## Windows cross-build (headless tests under Wine)
 
 | Tool | Minimum | Debian/Ubuntu package | Homebrew | Check |
@@ -86,3 +107,5 @@ the build path.
 - 2026-10-26 — Initial baseline, adapted from the C23 port's baseline:
   Clang added as a supported compiler family, MSVC excluded, manual
   validation terminals listed.
+- 2026-11-05 — Sanitizers section: the `sanitize` preset's runtimes per
+  platform (GCC 14 on Linux, Apple Clang on macOS).

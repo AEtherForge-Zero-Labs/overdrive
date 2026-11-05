@@ -51,6 +51,15 @@
       "cacheVariables": { "BUILD_SHARED_LIBS": true }
     },
     {
+      "name": "sanitize",
+      "inherits": "debug",
+      "cacheVariables": {
+        "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined"
+      }
+    },
+    {
       "name": "bench",
       "inherits": "base",
       "cacheVariables": {
@@ -67,6 +76,7 @@
     { "name": "shared", "configurePreset": "shared" },
     { "name": "windows-cross-debug", "configurePreset": "windows-cross-debug" },
     { "name": "windows-cross-shared", "configurePreset": "windows-cross-shared" },
+    { "name": "sanitize", "configurePreset": "sanitize" },
     { "name": "bench", "configurePreset": "bench" }
   ],
   "testPresets": [
@@ -80,6 +90,12 @@
     { "name": "release", "inherits": "test-base", "configurePreset": "release" },
     { "name": "debug-clang", "inherits": "test-base", "configurePreset": "debug-clang" },
     { "name": "shared", "inherits": "test-base", "configurePreset": "shared" },
+    {
+      "name": "sanitize",
+      "inherits": "test-base",
+      "configurePreset": "sanitize",
+      "filter": { "exclude": { "name": "^check_exports$" } }
+    },
     {
       "name": "windows-cross-debug",
       "inherits": "test-base",

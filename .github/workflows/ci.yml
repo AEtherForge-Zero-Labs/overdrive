@@ -22,6 +22,10 @@ jobs:
           - { os: ubuntu-24.04, compiler: clang-19, preset: debug-clang }
           - { os: macos-latest, compiler: cc, preset: debug }
           - { os: macos-latest, compiler: cc, preset: shared }
+          # AddressSanitizer and UndefinedBehaviorSanitizer (SC-002); the
+          # runtimes per platform are declared in the machine baseline.
+          - { os: ubuntu-24.04, compiler: gcc-14, preset: sanitize }
+          - { os: macos-latest, compiler: cc, preset: sanitize }
     env:
       CC: ${{ matrix.compiler }}
     steps:

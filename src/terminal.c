@@ -95,7 +95,26 @@ OVD_API OvdTerminalConfig ovd_terminal_config_default(void)
         .sink = nullptr,
         .sink_context = nullptr,
         .allocator = nullptr,
+        .input = false,
+        .mouse = false,
+        .bracketed_paste = false,
+        .focus_events = false,
+        .escape_delay_ms = 50,
+        .restore_on_exit = true,
     };
+}
+
+/* The escape delay's range, in milliseconds (R109, R115). */
+static constexpr int32_t ESCAPE_DELAY_MIN_MS = 0;
+static constexpr int32_t ESCAPE_DELAY_MAX_MS = 1000;
+
+/* R115: the report modes require input, and the escape delay is in range
+ * whether or not input is on. */
+static bool input_config_valid(const OvdTerminalConfig *config)
+{
+    const bool reports = config->mouse || config->bracketed_paste || config->focus_events;
+    return (config->input || !reports) && config->escape_delay_ms >= ESCAPE_DELAY_MIN_MS
+        && config->escape_delay_ms <= ESCAPE_DELAY_MAX_MS;
 }
 
 OVD_API OvdResult ovd_terminal_create(const OvdTerminalConfig *config, OvdTerminal **out)
@@ -111,6 +130,15 @@ OVD_API OvdResult ovd_terminal_create(const OvdTerminalConfig *config, OvdTermin
     }
     if (config->backend == OVD_BACKEND_HEADLESS && !size_positive(config->headless_size)) {
         return OVD_ERROR_INVALID_ARGUMENT;
+    }
+    if (!input_config_valid(config)) {
+        return OVD_ERROR_INVALID_ARGUMENT;
+    }
+    /* Interim, after every argument check and before anything is acquired:
+     * input is not implemented yet on either backend. OVD-17 removes this
+     * for the headless backend, OVD-18 for the system backend. */
+    if (config->input) {
+        return OVD_ERROR_UNSUPPORTED;
     }
 
     /* R28 steps 1 to 5 for the system backend, which then detects its
