@@ -10,7 +10,7 @@
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": true,
         "OVERDRIVE_BUILD_TESTS": true,
-        "OVERDRIVE_BUILD_EXAMPLES": false,
+        "OVERDRIVE_BUILD_EXAMPLES": true,
         "BUILD_SHARED_LIBS": false
       }
     },
