@@ -106,7 +106,9 @@ typedef enum OvdPlatformReady : uint32_t {
  * may be split across calls; an unpaired surrogate becomes U+FFFD), and a
  * buffer-size record sets *resized. On POSIX *resized is false. Requires
  * step 4b and capacity >= OVD_PLATFORM_READ_MIN: OVD_ERROR_INVALID_ARGUMENT
- * otherwise, or for nullptr. OVD_ERROR_PLATFORM if the read fails. */
+ * otherwise, or for nullptr. OVD_ERROR_PLATFORM if the read fails, or on
+ * POSIX if a wait saw stdin hang up and nothing is left to read: the bytes
+ * queued before the hang-up are returned first. */
 [[nodiscard]] OvdResult ovd_platform_input_read(OvdPlatformModes *modes, char *bytes,
                                                 size_t capacity, size_t *length, bool *resized);
 

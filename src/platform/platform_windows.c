@@ -319,8 +319,8 @@ OvdResult ovd_platform_input_read(OvdPlatformModes *modes, char *bytes, size_t c
         return OVD_OK;
     }
     /* Each record can produce at least one unit; take no more records than
-     * the capacity has units for, so none is dropped for lack of room
-     * except by its repeat count. */
+     * the capacity has units for. The loop below keeps room for one unit
+     * of every later record, so a repeat count never crowds one out. */
     DWORD want = unread < RECORDS_MAX ? unread : RECORDS_MAX;
     const size_t fit = capacity / UNIT_BYTES_MAX;
     if (want > fit) {
@@ -344,7 +344,9 @@ OvdResult ovd_platform_input_read(OvdPlatformModes *modes, char *bytes, size_t c
          * is TRUE"; UnicodeChar "Translated Unicode character". With
          * virtual-terminal input these carry the sequence's units
          * (ASSUMED, R107). wRepeatCount repeats a held key; repeats past
-         * the capacity are dropped. Other records are not input. */
+         * the room left after one unit for each later record are dropped,
+         * and a surrogate half is taken once, since repeating one half
+         * cannot form pairs. Other records are not input. */
         if (record->EventType != KEY_EVENT || !record->Event.KeyEvent.bKeyDown) {
             continue;
         }
@@ -353,10 +355,13 @@ OvdResult ovd_platform_input_read(OvdPlatformModes *modes, char *bytes, size_t c
             continue;
         }
         WORD repeat = record->Event.KeyEvent.wRepeatCount;
-        if (repeat == 0) {
+        if (repeat == 0 || (unit >= 0xD800 && unit <= 0xDFFF)) {
             repeat = 1;
         }
-        for (WORD r = 0; r < repeat && capacity - used >= UNIT_BYTES_MAX; ++r) {
+        /* This record and each later one keep one unit's room. */
+        const size_t reserved = (size_t)(got - i) * UNIT_BYTES_MAX;
+        used += put_unit(&saved, unit, bytes + used);
+        for (WORD r = 1; r < repeat && capacity - used >= reserved; ++r) {
             used += put_unit(&saved, unit, bytes + used);
         }
     }

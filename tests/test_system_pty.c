@@ -993,6 +993,37 @@ static bool case_input_null_stdin(Session *s)
     return expect_output(&s->pty, LITERAL(""), "stdin not a terminal");
 }
 
+/* A hung-up stdin ends a wait with an error at once, timed or forever,
+ * instead of reporting ready forever. Closing the master hangs up the
+ * slave on fd 0; macOS's poll then reports POLLIN with POLLHUP and read
+ * returns 0, Linux's read fails with EIO (INFERRED). */
+static bool case_input_hangup(Session *s)
+{
+    struct sigaction before;
+    CHECK(winch_snapshot(&before));
+    const OvdTerminalConfig c = input_config(s, false);
+    CHECK_RESULT(ovd_terminal_create(&c, &s->system), OVD_OK);
+    close(s->pty.master);
+    s->pty.master = -1;
+
+    alarm(10);
+    const int32_t timeouts[] = { 0, 2000, OVD_WAIT_FOREVER };
+    for (size_t i = 0; i < sizeof timeouts / sizeof timeouts[0]; ++i) {
+        OvdEvent event = { .kind = OVD_EVENT_KIND_KEY };
+        const int64_t start = now_ms();
+        CHECK_RESULT(ovd_input_wait(s->system, timeouts[i], &event), OVD_ERROR_PLATFORM);
+        CHECK(now_ms() - start < 1000);
+    }
+    alarm(0);
+
+    /* The exit writes fail and are not reported (R28); the handler is
+     * still put back. */
+    ovd_terminal_destroy(s->system);
+    s->system = nullptr;
+    CHECK(winch_is(&before));
+    return true;
+}
+
 static volatile sig_atomic_t application_winches;
 
 static void application_winch(int)
@@ -1135,6 +1166,7 @@ int main(void)
     ok = run("input: timing", 0, size, PLACE_BOTH, case_input_timing) && ok;
     ok = run("input: stdin not a terminal", 0, size, PLACE_NULL_STDIN, case_input_null_stdin)
          && ok;
+    ok = run("input: stdin hangs up", 0, size, PLACE_BOTH, case_input_hangup) && ok;
     ok = run("input: application SIGWINCH handler", 0, size, PLACE_BOTH, case_input_app_handler)
          && ok;
     for (int call = 1; call <= 6; ++call) {

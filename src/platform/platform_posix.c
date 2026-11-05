@@ -52,6 +52,9 @@ typedef struct Saved {
     struct termios input;
     /* stdin's termios as read before raw mode, that is, after echo (R106). */
     struct termios raw;
+    /* Set by a wait that saw stdin hang up with input still reported, so
+     * the read that then finds nothing reports the hang-up. */
+    bool hung_up;
 } Saved;
 
 static_assert(sizeof(Saved) <= OVD_PLATFORM_SAVED_SIZE,
@@ -369,12 +372,20 @@ OvdResult ovd_platform_input_wait(OvdPlatformModes *modes, int32_t timeout_ms, u
         wake_drain();
         *ready |= OVD_PLATFORM_READY_RESIZE;
     }
+    /* poll sets POLLHUP, POLLERR, and POLLNVAL "even if the application
+     * did not set the corresponding bit in events": stdin hung up or is
+     * invalid, and would report ready forever. */
+    const bool hung_up = (fds[0].revents & (POLLHUP | POLLERR | POLLNVAL)) != 0;
     if ((fds[0].revents & POLLIN) != 0) {
+        /* A hang-up with input reported (macOS ptys report both, and read
+         * then returns 0): the bytes still queued are read first, and the
+         * read that finds none reports the hang-up. */
+        if (hung_up) {
+            const bool set = true;
+            memcpy(modes->saved + offsetof(Saved, hung_up), &set, sizeof set);
+        }
         *ready |= OVD_PLATFORM_READY_INPUT;
-    } else if ((fds[0].revents & (POLLHUP | POLLERR | POLLNVAL)) != 0) {
-        /* poll sets these "even if the application did not set the
-         * corresponding bit in events": stdin hung up or is invalid, and
-         * would report ready forever. */
+    } else if (hung_up) {
         return OVD_ERROR_PLATFORM;
     }
     return OVD_OK;
@@ -395,6 +406,11 @@ OvdResult ovd_platform_input_read(OvdPlatformModes *modes, char *bytes, size_t c
         /* VMIN and VTIME are 0 (Case D): read returns what is available,
          * or 0 without waiting. */
         const ssize_t got = read(STDIN_FILENO, bytes, chunk);
+        bool hung_up = false;
+        memcpy(&hung_up, modes->saved + offsetof(Saved, hung_up), sizeof hung_up);
+        if (got == 0 && hung_up) {
+            return OVD_ERROR_PLATFORM;
+        }
         if (got >= 0) {
             *length = (size_t)got;
             return OVD_OK;
