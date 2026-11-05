@@ -89,7 +89,7 @@ memory, like `OvdCellView`; its lifetime is documented at the type.
 | `src/terminal.c`, `src/internal.h` (changed) | terminal module | FR-001, R115 validation, buffers at create |
 | `src/terminal_system.c` (changed) | terminal module, system backend | FR-002, FR-003, R116 sequences, exit sequence for the record |
 | `src/platform/platform.h`, `platform_posix.c`, `platform_windows.c` (changed) | transformational OS wrappers plus the one process-wide restoration record | FR-002, FR-030–FR-036 (R106, R107, R111–R113) |
-| `src/unicode.c` (reused, unchanged) | transformational | R103 paste repair, key UTF-8 decode (Art. IX: reuse, not duplicate) |
+| `src/unicode.c` (reused; exposes its UTF-8 decoder, R118) | transformational | R103 paste repair, key UTF-8 decode (Art. IX: reuse, not duplicate) |
 | `CMakePresets.json` `sanitize` preset + CI job; sanitizer runtimes declared in `.specify/memory/baseline.md` (Art. VIII rule 1) | declared check | SC-002 |
 | `tests/test_decode.c`, `test_decode_fuzz.c`, `test_input.c`, `test_restore_pty.c`; `test_steady_state.c`, `test_system_pty.c` extended | tests | SC-001–SC-005 |
 | `examples/input_demo.c`, `docs/validation/manual-checklist.md` | example, checklist | SC-006, US2 |

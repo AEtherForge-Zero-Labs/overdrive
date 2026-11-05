@@ -90,8 +90,8 @@ This is also what R108 needs. Paste mode bypasses layer 2: bytes are
 text until `CSI 201 ~`.
 
 **R105 — The key encodings decoded.** From [XTERM], "PC-Style Function
-Keys" and "Mouse Tracking" (ASSUMED until the decode issue quotes each
-row into its test table):
+Keys" and "Mouse Tracking" (VERIFIED, R118; each form is quoted in
+`tests/test_decode.c`):
 - `CSI A/B/C/D/H/F` and `SS3 A/B/C/D/H/F`: arrows, Home, End;
   `CSI 1 ; m X` adds modifiers.
 - `CSI n ~`: 2 Insert, 3 Delete, 5 PageUp, 6 PageDown, 1/7 Home,
@@ -351,6 +351,32 @@ Assumptions).
   restored after destroy.
 - `examples/input_demo.c` (name from `OVD-IDENTITY-001` §8.3) and new
   items in `docs/validation/manual-checklist.md`: SC-006.
+
+**R118 — Decoder details decided at implementation.** The spec and R104
+to R109 leave these open. Each one is the narrowest reading (Art. IX);
+the archived change `openspec/changes/archive/2026-11-05-i53-decoder/`
+(design D1 to D5) has the full reasoning.
+- `unicode.c` exposes its existing UTF-8 decoder as
+  `ovd_unicode_decode_utf8`, with a status that tells a sequence cut
+  short by the end of a read from an ill-formed one. The decoder needs
+  that to hold a partial scalar. The grapheme iterator is unchanged.
+- The decoder takes the caller's monotonic time on each call and reads
+  no clock. The escape delay is measured from the last byte consumed
+  (FR-013, "no further byte arrives"). It applies to every held
+  sequence:
+  - an unfinished CSI or SS3 is discarded;
+  - a partial scalar becomes U+FFFD.
+
+  Paste is never timed.
+- The dispatch table accepts only the shapes R105 and FR-015 list. Empty
+  parameters, `:` sub-parameters, modifier codes outside 1–16 and
+  intermediates are discarded. SGR mouse coordinates 1 to 2³¹ on the
+  wire map to 0-based `int32_t` values up to `INT32_MAX`; 0 and larger
+  values are discarded.
+- Verified this session: the xterm reference (Patch #411) and
+  Microsoft's "Console Virtual Terminal Sequences", Input Sequences,
+  give R105's forms. The ECMA-48 byte ranges in R104 stay ASSUMED:
+  xterm's introduction states the modal rule but not the ranges.
 
 ## C. Tensions
 
