@@ -15,7 +15,7 @@
     {
       "id": "OVD-25", "title": "Widgets: contract freeze, shared helpers, text fitting",
       "phase": 1, "tasks": ["T301","T302","T303","T304","T305","T306","T307","T308","T309"], "depends_on": ["OVD-23"],
-      "owns": ["include/overdrive/widgets.h","include/overdrive/overdrive.h","src/widget.h","src/widget.c","src/textfit.h","src/textfit.c","src/unicode.h","src/unicode.c","tests/test_headers.c","tests/test_unicode.c","tests/test_textfit.c","tests/test_widget.c","tests/support/canvas_screen.h","tests/support/canvas_screen.c"],
+      "owns": ["include/overdrive/widgets.h","include/overdrive/overdrive.h","src/widget.h","src/widget.c","src/textfit.h","src/textfit.c","src/unicode.h","src/unicode.c","tests/test_headers.c","tests/test_unicode.c","tests/test_textfit.c","tests/test_widget.c","tests/support/canvas_screen.h","tests/support/canvas_screen.c","specs/003-packaging/contracts/consumer.md"],
       "requirements": ["FR-006","FR-008","FR-009","FR-010","FR-015","FR-021","SC-001"],
       "proof": ["cmake --preset debug","cmake --build --preset debug","ctest --preset debug","cmake --preset shared","cmake --build --preset shared","ctest --preset shared","cmake --preset sanitize","cmake --build --preset sanitize","ctest --preset sanitize","cmake --preset windows-cross-debug","cmake --build --preset windows-cross-debug","ctest --preset windows-cross-debug"],
       "tier": "opus",

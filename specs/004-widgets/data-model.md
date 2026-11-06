@@ -62,6 +62,7 @@ fixed  = Σ amount over FIXED columns
 rest   = max(0, W − fixed − gaps)
 fill_i = floor(rest × amount_i / Σ amount over FILL columns)
          + 1 for the first (rest − Σ floor) FILL columns, from the left
+fill_i = 0 for every FILL column when Σ amount over FILL columns is 0
 ```
 
 The computation saturates rather than overflowing (each term is

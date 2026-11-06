@@ -32,7 +32,7 @@ What passing shows:
 | `test_list` | US1 scenarios 1–6 as expected screens with styles named (SC-002) |
 | `test_prompt` | US2 scenarios 1–6, plus cursor and text after each step |
 | `test_table` | US3 scenarios 1–6 |
-| `test_widget_fuzz` | at least 10⁵ cases per widget, with no write outside the area, no out-of-range callback, and the prompt invariant held (SC-005); prints its case count and seed |
+| `test_widget_fuzz` | at least 10⁵ cases per widget, with no write outside the area beyond FR-001's blank half of a wide grapheme across an edge, no out-of-range callback, and the prompt invariant held (SC-005); prints its case count and seed |
 | `test_steady_state` | 0 allocator calls over 10,000 cycles per widget (SC-003) |
 
 SC-004 (only the visible rows are asked for) is a case in `test_list`

@@ -13,7 +13,10 @@
  * canvas, state, or descriptor as doing nothing.
  *
  * Drawing writes only inside the rectangle intersected with the canvas's
- * current clip, and leaves the clip as it found it. All displayed text is
+ * current clip, and leaves the clip as it found it. The one exception is
+ * the canvas's own rule (render.h, Drawing): where a wide grapheme
+ * straddles that edge and the widget overwrites its inside half, the
+ * outside half becomes a space in its own style. All displayed text is
  * untrusted and is drawn as ovd_canvas_text draws it (render.h): nothing
  * in it reaches the terminal as a control sequence.
  */
@@ -171,7 +174,8 @@ typedef enum OvdColumnSizing : uint8_t {
 
 /* One column. Transparent: a plain description the application fills in.
  * Out-of-range values read as: sizing and align as their 0 value; a
- * negative or zero amount as 0 cells, or as a share of 0 (no width). */
+ * negative or zero amount as 0 cells, or as a share of 0 (no width).
+ * When every fill column's share is 0, the fill columns get no width. */
 typedef struct OvdColumn {
     OvdText title;
     OvdColumnSizing sizing;
@@ -267,21 +271,27 @@ OVD_API void ovd_prompt_draw(OvdCanvas *canvas, OvdRect area, OvdPromptState *st
 /* Applies event to the prompt, after the entry correction above.
  *
  * Keys without OVD_MODIFIER_CTRL or OVD_MODIFIER_ALT:
- * - OVD_KEY_CHAR inserts the code point at the cursor; a control code
- *   point returns OVD_OUTCOME_IGNORED. After any insertion the cursor is
+ * - OVD_KEY_CHAR inserts the code point at the cursor and returns
+ *   OVD_OUTCOME_CHANGED (or OVD_OUTCOME_TRUNCATED, below); a control
+ *   code point, a surrogate, or a value above U+10FFFF returns
+ *   OVD_OUTCOME_IGNORED. After any insertion the cursor is
  *   at the end of the grapheme that holds the last inserted byte, so it
  *   stays on a boundary even when the text after it attaches to the
  *   insertion;
- * - Left, Right, Home, End move the cursor by whole graphemes;
+ * - Left, Right, Home, End move the cursor by whole graphemes and return
+ *   OVD_OUTCOME_MOVED, or OVD_OUTCOME_UNCHANGED when the cursor is
+ *   already at that end;
  * - Backspace and Delete remove the whole grapheme before or at the
- *   cursor;
+ *   cursor and return OVD_OUTCOME_CHANGED, or OVD_OUTCOME_UNCHANGED when
+ *   there is nothing before or at the cursor;
  * - Enter returns OVD_OUTCOME_SUBMITTED; Escape returns
  *   OVD_OUTCOME_CANCELLED; neither changes the text;
  * - Tab and every other key return OVD_OUTCOME_IGNORED, so the
  *   application can use them (for example, Tab to change widgets).
  * OVD_EVENT_KIND_PASTE_TEXT inserts its text at the cursor: newline,
- * carriage return, and tab become a space, other controls are dropped.
- * Paste start and end markers, and every other event, return
+ * carriage return, and tab become a space, other controls are dropped,
+ * and it returns OVD_OUTCOME_CHANGED, or OVD_OUTCOME_UNCHANGED when
+ * nothing is left after filtering. Paste start and end markers, and every other event, return
  * OVD_OUTCOME_IGNORED.
  *
  * Insertion keeps whole graphemes while they fit in capacity - 1 bytes

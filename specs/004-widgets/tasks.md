@@ -41,7 +41,7 @@ through are proven: text fitting, the encoder, the style helpers, and
 the canvas read-back for tests. Independent test:
 `ctest --preset debug -R '^test_(headers|unicode|textfit|widget)$'`.
 
-- [ ] T301 Copy `specs/004-widgets/contracts/include/overdrive/widgets.h` into `include/overdrive/widgets.h` unchanged (the contract freeze point for 004).
+- [ ] T301 Copy `specs/004-widgets/contracts/include/overdrive/widgets.h` into `include/overdrive/widgets.h` unchanged (the contract freeze point for 004). Add `widgets.h` to the header row of "Install layout" in `specs/003-packaging/contracts/consumer.md`, since that row lists the installed headers exactly (003 FR-010).
   - Add `#include <overdrive/widgets.h>` to `include/overdrive/overdrive.h` after `input.h`, and change its `PROPOSED CONTRACT` line to name 004.
   - Add `widgets.h` to `overdrive_public_headers` in `CMakeLists.txt`. This issue owns that one line. `tests/CMakeLists.txt` then compiles the header alone and twice, and checks that it includes only public and ISO C headers.
   - Extend `tests/test_headers.c`:
@@ -110,6 +110,7 @@ Goal: pick from a list or a menu (US1). Independent test:
     - a handler called before any draw pages by 1 (R306).
   - **FR-001**:
     - nothing is drawn outside the area (the canvas is pre-filled with a sentinel);
+    - a wide grapheme straddling each edge of the area: the outside half becomes a space in its own style, and nothing else outside changes (FR-001's exception, R309);
     - a caller clip narrower than the area limits the drawing, and `ovd_canvas_clip` afterwards equals the clip before;
     - an area partly off the canvas works; zero or negative areas draw nothing;
     - 1 × N and N × 1 areas work.
@@ -207,7 +208,7 @@ Goal: SC-003 and SC-005 across all three widgets. Independent test:
     - list and table contents come from callbacks that record every index asked for;
     - the prompt gets a buffer with guard bytes on both sides.
   - **Checked after every call**:
-    - no cell outside the area intersected with the clip differs from the sentinel;
+    - no cell outside the area intersected with the clip differs from the sentinel, except a cell next to that edge whose wide-grapheme partner was inside, which must now be a space in the grapheme's style (the sentinel places wide graphemes across the edges in some cases);
     - the clip is restored;
     - callbacks were asked only for indices in `[0, count)`, and at most `page` rows a draw;
     - the list state satisfies data-model.md's correction;

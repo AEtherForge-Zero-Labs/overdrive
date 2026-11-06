@@ -190,7 +190,8 @@ frame with an expected screen.
 
 - **Zero, negative, or tiny rectangles.** A rectangle with no area draws
   nothing. A rectangle 1 column wide or 1 row tall draws what fits and
-  never writes outside the rectangle.
+  never writes outside the rectangle (apart from FR-001's blank half
+  of a wide character that straddles the edge).
 - **A rectangle partly off the canvas.** Drawing is clipped as all
   canvas drawing is. The widget does not change the caller's clip.
 - **Stored state that is out of range or contradictory.** A selection
@@ -231,6 +232,10 @@ frame with an expected screen.
 - **FR-001**: Each widget MUST draw into a rectangle of the frame's
   canvas given by the application, and MUST NOT draw outside it or
   change the canvas clip as seen by the application after the call.
+  The one exception is the canvas's existing rule that no wide
+  character is left half-drawn. Where a wide character drawn earlier
+  straddles the rectangle's edge and the widget draws over its inside
+  half, its outside half becomes a blank.
 - **FR-002**: The state that must persist between frames (the
   selection, the scroll positions, and the prompt's cursor and text)
   MUST be held by the application, in storage it provides. Overdrive
@@ -343,8 +348,10 @@ frame with an expected screen.
   there are visible rows, whether the list holds 10 items or 10 million.
 - **SC-005**: Across a seeded fuzz run of at least 100,000 random cases
   per widget (each a random state, rectangle, content, and sequence of
-  up to 8 events, drawn after each event), no widget writes outside its
-  rectangle, reads outside its inputs, or leaves the prompt's text
+  up to 8 events, drawn after each event, with wide characters placed
+  across the rectangle's edges), no widget writes outside its
+  rectangle beyond the blank half that FR-001 allows, reads outside
+  its inputs, or leaves the prompt's text
   invalid or its cursor inside a character.
 - **SC-006**: The first consumer can replace its own selection,
   scrolling, and line-editing code with these widgets. Adoption itself

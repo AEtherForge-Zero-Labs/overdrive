@@ -168,7 +168,10 @@ and OVD-30 after OVD-24 (`README.md`, `docs/architecture.md`).
 
 1. **OVD-25 Contract freeze, shared helpers, text fitting.**
    - Adds `widgets.h` to `include/`, with its line in
-     `overdrive_public_headers`, and includes it from `overdrive.h`.
+     `overdrive_public_headers`, and includes it from `overdrive.h`. It
+     also adds `widgets.h` to the header row of 003's install-layout
+     contract (`specs/003-packaging/contracts/consumer.md`), which lists
+     the installed headers exactly. No open issue owns that file.
    - Adds `src/widget.{c,h}`: the style default, the array helper, and
      the clip and combine helpers.
    - Also adds `textfit.{c,h}`, `unicode.c`'s encoder, the

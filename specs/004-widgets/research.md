@@ -139,8 +139,16 @@ piece below names the FR it serves.
 - **Rationale**: FR-001. `ovd_canvas_set_clip` intersects only with the
   canvas bounds, not with the current clip (VERIFIED, `render.h`), so
   the widget intersects with `ovd_canvas_clip()` itself first. The
-  canvas then guarantees that nothing is written outside the clip, and
-  that no wide grapheme is left half-drawn (render.h, Drawing).
+  canvas then discards everything outside the clip, with one exception
+  (VERIFIED, `render.h` Drawing, and `tests/test_canvas.c` R20): when a
+  draw overwrites one half of a wide grapheme, the other half becomes a
+  space in its own style, even outside the clip. A widget whose edge
+  cuts a wide grapheme the application drew earlier therefore blanks
+  one cell outside its area. FR-001 and SC-005 state this exception.
+- **Alternatives considered**: avoid the blank by leaving an edge cell
+  undrawn when it holds half of a wide grapheme. That leaves the
+  widget's own area incompletely drawn, and doing it cleanly needs a
+  canvas change that has no present requirement (Art. VII).
 
 ### R310 — Selected-row and cursor style combination
 
@@ -293,7 +301,8 @@ piece below names the FR it serves.
   count, the buffer's capacity) and half uniformly. After every call it
   checks:
   - nothing was written outside the area (by comparing a canvas
-    pre-filled with a sentinel);
+    pre-filled with a sentinel that includes wide graphemes across the
+    area's edges), apart from FR-001's blank half of such a grapheme;
   - the callbacks were asked only for in-range indices, and at most
     `page` of them;
   - the prompt's text is valid UTF-8 with no controls,
@@ -337,5 +346,6 @@ piece below names the FR it serves.
   (constitution: "a naming map"), so no Layout module is added without
   a present requirement (Art. VII).
 - **Spec amendments made during planning**: the `UNCHANGED` outcome
-  (R304) and direct-buffer repair (R312). Both are in `spec.md` in this
+  (R304), direct-buffer repair (R312), and FR-001's wide-glyph
+  exception (R309, found in review). Both are in `spec.md` in this
   change and recorded here (Art. IX).
