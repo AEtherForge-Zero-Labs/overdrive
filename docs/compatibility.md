@@ -20,18 +20,17 @@ added here names:
 
 | Terminal | Version | Platform | Date | Result |
 |---|---|---|---|---|
-| WezTerm | 20250723-081524-efec7001 | macOS 27.2 (26B5091g) | 2026-11-05 | Owner's summary: works. |
-| Command Prompt | not recorded | Windows 11, version not recorded; a `windows-cross-debug` build | 2026-11-05 | Owner's summary: works, and closing the window restored the console. |
+| WezTerm | 20250723-081524-efec7001 | macOS 27.2 (26B5091g) | 2026-11-05 (reported) | Owner's summary: "verified". |
+| Command Prompt | not recorded | Windows 11, version not recorded; a `windows-cross-debug` build | 2026-11-05 (reported) | Owner's summary: "observed working"; "closing seemed fine too". |
 
-Both rows are summaries: the owner reported that the program works,
-but did not record a result for each check. The Windows row does not
-record which window hosted Command Prompt. Windows 11 opens it in
-Windows Terminal or in the console host, depending on its
-default-terminal setting.
+Both rows are summaries, dated by when they were reported, not run.
+The owner reported the program working in those two terminals, but did
+not record which programs, options, and checks were run, or a result
+for each check. The Windows row also does not record which window
+hosted Command Prompt (Windows Terminal or the console host).
 
-In those two terminals, the behaviors below were seen working as a
-whole. For any other terminal, and for each check on its own, they
-rest on cited documentation and are unverified (research §E,
+Until per-check results exist, the behaviors below rest on cited
+documentation and are unverified in every terminal (research §E,
 "Unverified"):
 - the enter and exit sequences (R26);
 - deferred wrap at the last column (R33);
@@ -44,9 +43,10 @@ The same holds for input and restoration (feature 002):
 - whether it honors the mouse, paste, and focus modes;
 - restoration after closing the window;
 - on Windows, the console input path, the console control handler, the
-  unhandled-exception filter, and the `SIGABRT` handler (R113). They
-  ran in the Windows row above, but the exit statuses they produced
-  (3 for `abort`, 0xC0000005, 0xC000013A) were not recorded.
+  unhandled-exception filter, and the `SIGABRT` handler (R113). In the
+  Windows row, closing the window was reported to work ("closing
+  seemed fine too"). Whether the input path, the crash paths, and
+  Ctrl+C with input off were exercised was not recorded.
 
 ## Automated platforms
 

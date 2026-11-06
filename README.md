@@ -55,8 +55,9 @@ provides the following:
 
 The pty tests show restoration on Linux and macOS. On Windows, CI
 only cross-builds input and restoration: Wine runs only the headless
-tests and the redirected-stdout path. The owner has seen them work on
-Windows 11 by hand. See [`docs/compatibility.md`](docs/compatibility.md). Layout, motion, and
+tests and the redirected-stdout path. On Windows 11, the owner
+reported that closing the window "seemed fine". See
+[`docs/compatibility.md`](docs/compatibility.md). Layout, motion, and
 widgets are later features, each specified when a consumer needs it.
 
 ## Build
