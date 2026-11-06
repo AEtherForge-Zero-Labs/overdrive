@@ -55,6 +55,12 @@ typedef struct OvdUtf8Unit {
  * nullptr or available is 0. */
 [[nodiscard]] OvdUtf8Unit ovd_unicode_decode_utf8(const char *bytes, size_t available);
 
+/* Writes the UTF-8 form of code_point to out and returns its byte count,
+ * 1 to 4 (Unicode Standard, Ch. 3, Table 3-6). A surrogate (U+D800 to
+ * U+DFFF) or a value above U+10FFFF is not a scalar value: nothing is
+ * written, and it returns 0. 004 R314. */
+[[nodiscard]] uint8_t ovd_unicode_encode_utf8(uint32_t code_point, char out[4]);
+
 /* Reads the grapheme that starts at text[*offset], stores it in *out, and
  * advances *offset past every input byte it covers. Whatever is at
  * *offset starts a grapheme: an extender there is lone and becomes U+FFFD.

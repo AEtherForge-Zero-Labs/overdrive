@@ -312,8 +312,45 @@ static void test_length_limit(void)
                       "\xF0\x9F\x91\xA7" ZWJ "\xF0\x9F\x91\xA6", 25) == 1);
 }
 
+/* The encoder (004 R314): each scalar value's length at the boundaries,
+ * 0 bytes for surrogates and values past U+10FFFF, and every written
+ * sequence decodes back to the same scalar value. */
+static void test_encoder(void)
+{
+    static const struct {
+        uint32_t code_point;
+        uint8_t size;
+    } cases[] = {
+        { 0x0000, 1 },   { 0x007F, 1 },   { 0x0080, 2 },   { 0x07FF, 2 },
+        { 0x0800, 3 },   { 0xFFFF, 3 },   { 0x10000, 4 },  { 0x10FFFF, 4 },
+        { 0xD800, 0 },   { 0xDFFF, 0 },   { 0x110000, 0 }, { 0xFFFFFFFF, 0 },
+    };
+    for (size_t i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        char out[4] = { 0 };
+        const uint8_t size = ovd_unicode_encode_utf8(cases[i].code_point, out);
+        if (size != cases[i].size) {
+            fprintf(stderr, "encode U+%04X: %u bytes, expected %u\n",
+                    (unsigned)cases[i].code_point, (unsigned)size, (unsigned)cases[i].size);
+            ++failures;
+            continue;
+        }
+        if (size == 0) {
+            continue;
+        }
+        const OvdUtf8Unit unit = ovd_unicode_decode_utf8(out, size);
+        if (unit.status != OVD_UTF8_SCALAR || unit.size != size
+                || unit.code_point != cases[i].code_point) {
+            fprintf(stderr, "encode U+%04X: decodes to status %d, size %u, U+%04X\n",
+                    (unsigned)cases[i].code_point, (int)unit.status, (unsigned)unit.size,
+                    (unsigned)unit.code_point);
+            ++failures;
+        }
+    }
+}
+
 int main(void)
 {
+    test_encoder();
     test_end_of_text();
     test_valid_text();
     test_ill_formed_utf8();
@@ -324,6 +361,6 @@ int main(void)
         fprintf(stderr, "unicode: %d failure(s)\n", failures);
         return EXIT_FAILURE;
     }
-    puts("unicode: decoding, segmentation, width, and replacement passed");
+    puts("unicode: encoding, decoding, segmentation, width, and replacement passed");
     return EXIT_SUCCESS;
 }

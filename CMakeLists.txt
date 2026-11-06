@@ -102,7 +102,7 @@ ovd_target_warnings(overdrive)
 
 # The public headers, as one PUBLIC file set: its base directory is the
 # include directory of the build tree (R204). tests/ reads the list too.
-set(overdrive_public_headers core.h terminal.h render.h input.h overdrive.h)
+set(overdrive_public_headers core.h terminal.h render.h input.h widgets.h overdrive.h)
 list(TRANSFORM overdrive_public_headers PREPEND "include/overdrive/"
     OUTPUT_VARIABLE overdrive_public_header_files)
 target_sources(overdrive PUBLIC FILE_SET HEADERS BASE_DIRS include
@@ -220,3 +220,9 @@ endif()
 target_sources(overdrive PRIVATE src/decode.c)
 # Headless input: wait and feed over the decoder (OVD-17, R102, R109, R110).
 target_sources(overdrive PRIVATE src/input.c)
+
+# Widgets: text fitting (OVD-25).
+target_sources(overdrive PRIVATE src/textfit.c)
+
+# Widgets: shared pieces (OVD-25).
+target_sources(overdrive PRIVATE src/widget.c)
