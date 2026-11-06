@@ -29,8 +29,8 @@ following:
   write.
 
 Measured frame costs, with the machine and command, are in
-[`docs/architecture.md`](docs/architecture.md#measurements). No real
-terminal has been observed yet; see
+[`docs/architecture.md`](docs/architecture.md#measurements). What has
+been observed in real terminals is in
 [`docs/compatibility.md`](docs/compatibility.md).
 
 Feature 2, [`specs/002-input-restore/`](specs/002-input-restore/),
@@ -60,6 +60,10 @@ reported that closing the window "seemed fine". See
 [`docs/compatibility.md`](docs/compatibility.md). Layout, motion, and
 widgets are later features, each specified when a consumer needs it.
 
+Feature 3, [`specs/003-packaging/`](specs/003-packaging/), lets another
+CMake project build and link Overdrive, either from its source tree or
+from an installed copy. See [Using Overdrive](#using-overdrive).
+
 ## Build
 
 The CMake presets are the supported build. Minimum tool versions are in
@@ -73,19 +77,81 @@ ctest --preset debug
 
 The `bench` preset builds the render benchmark (`render_benchmark`).
 
+## Using Overdrive
+
+A CMake project gets Overdrive in one of two ways. Both give the same
+target, `overdrive::overdrive`: a static library, or a shared one when
+`BUILD_SHARED_LIBS` is on. The full build contract is
+[`specs/003-packaging/contracts/consumer.md`](specs/003-packaging/contracts/consumer.md).
+
+**From the source tree.** Copy or fetch Overdrive into your project,
+then:
+
+```cmake
+add_subdirectory(third_party/overdrive)
+target_link_libraries(app PRIVATE overdrive::overdrive)
+```
+
+- **Defaults.** When Overdrive is not the top-level project, its tests,
+  examples, benchmarks, and install rules are off. To turn one on, set
+  `OVERDRIVE_BUILD_TESTS`, `OVERDRIVE_BUILD_EXAMPLES`,
+  `OVERDRIVE_BUILD_BENCHMARKS`, or `OVERDRIVE_INSTALL` before
+  `add_subdirectory`.
+- **What linking adds.** C23, and `OVERDRIVE_SHARED` when the library is
+  shared. Nothing else reaches your targets: no compile options and no
+  other definitions.
+- **Cache entries.** Overdrive adds none outside `OVERDRIVE_*`,
+  `overdrive_*`, and `BUILD_SHARED_LIBS`.
+- **Refusals.** A second copy of Overdrive in the same build, or a target
+  of yours named `overdrive`, stops configuration with a message naming
+  the cause.
+
+**From an installed copy.** Install a build of Overdrive once:
+
+```bash
+cmake --install <overdrive-build-dir> --prefix <prefix>
+```
+
+Then, with `<prefix>` in `CMAKE_PREFIX_PATH`:
+
+```cmake
+find_package(overdrive 0.1 REQUIRED)
+target_link_libraries(app PRIVATE overdrive::overdrive)
+```
+
+- **What the prefix holds.** The public headers, the library, the
+  package files, and Overdrive's `LICENSE` and the Unicode data notice
+  `LICENSE-UCD` in `share/doc/overdrive`. Nothing else.
+- **Moving it.** The prefix can be moved after installing.
+
+**Versions.** While the major version is 0, `find_package(overdrive
+0.1)` accepts only 0.1.x: an installed 0.2 or 0.0 is refused. A request
+without a version accepts any installed version.
+
+**Windows, shared.** The program needs the DLL beside it or on `PATH`.
+This step copies it after each build:
+
+```cmake
+if(WIN32)
+    add_custom_command(TARGET app POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy -t
+            $<TARGET_FILE_DIR:app> $<TARGET_RUNTIME_DLLS:app>
+        COMMAND_EXPAND_LISTS)
+endif()
+```
+
+With a static library the DLL list is empty, and the step copies
+nothing.
+
+Each claim above is checked by the consumer tests, `consumer_vendored`,
+`consumer_duplicate`, and `consumer_installed`, in every CI job. They
+build a separate minimal project with `-Wall -Wextra -Wpedantic -Werror`
+(see [`docs/compatibility.md`](docs/compatibility.md)).
+
 ## Usage
 
 ```c
 #include <overdrive/overdrive.h>
-```
-
-There are no install rules, so add Overdrive to your build as a
-subdirectory:
-
-```cmake
-set(OVERDRIVE_BUILD_TESTS OFF)
-add_subdirectory(overdrive)
-target_link_libraries(myapp PRIVATE overdrive::overdrive)
 ```
 
 The API is in [`include/overdrive/`](include/overdrive/):

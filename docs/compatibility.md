@@ -79,6 +79,12 @@ What these runs show:
     the `sanitize` jobs);
   - wait, feed, and the virtual clock (`test_input`);
   - 0 allocator calls while reading input (`test_steady_state`, SC-004).
+- **Consuming Overdrive (feature 003).** `consumer_vendored`,
+  `consumer_duplicate`, and `consumer_installed` passed in all 10 jobs
+  of CI run 42233355961 on 2026-11-06, Wine included. Each builds a
+  separate project against Overdrive, from its source tree or from an
+  installed and then moved copy. They show that the build contract
+  holds on these toolchains. They say nothing about a terminal.
 - **The system backend on a pseudo-terminal.** This applies to Linux
   and macOS, every job above. These tests are POSIX-only, so Wine does
   not run them.
