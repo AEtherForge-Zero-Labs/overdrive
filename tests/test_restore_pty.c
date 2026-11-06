@@ -1289,9 +1289,22 @@ static bool resethand_reported(void)
     return reported;
 }
 
+/* Linux reports SA_RESETHAND on read-back, so there the case must run: a
+ * skip would hide a regression, and CI shows a test's output only when
+ * it fails. Elsewhere a platform that does not report it (macOS) skips. */
+#if defined(__linux__)
+constexpr bool RESETHAND_REQUIRED = true;
+#else
+constexpr bool RESETHAND_REQUIRED = false;
+#endif
+
 static bool case_oneshot(int parameter)
 {
     if (parameter == 0 && !resethand_reported()) {
+        if (RESETHAND_REQUIRED) {
+            fprintf(stderr, "this platform must report SA_RESETHAND, and does not\n");
+            return false;
+        }
         fprintf(stderr, "this platform does not report SA_RESETHAND (R121)\n");
         case_skipped = true;
         return true;
