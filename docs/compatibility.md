@@ -8,9 +8,8 @@ separately:
 
 ## Terminals observed
 
-**None yet.** No terminal emulator or console has been observed running
-Overdrive. Agents cannot make these observations (Art. XVI), so the owner
-records them through the manual validation checklist,
+Agents cannot make these observations (Art. XVI), so the owner records
+them through the manual validation checklist,
 [`validation/manual-checklist.md`](validation/manual-checklist.md):
 part 1 for rendering, part 2 for input and restoration. Each row
 added here names:
@@ -21,23 +20,33 @@ added here names:
 
 | Terminal | Version | Platform | Date | Result |
 |---|---|---|---|---|
+| WezTerm | 20250723-081524-efec7001 | macOS 27.2 (26B5091g) | 2026-11-05 (reported) | Owner's summary: "verified". |
+| Command Prompt | not recorded | Windows 11, version not recorded; a `windows-cross-debug` build | 2026-11-05 (reported) | Owner's summary: "observed working"; "closing seemed fine too". |
 
-Until a row exists, these behaviors rest on cited documentation and are
-unverified (research §E, "Unverified"):
+Both rows are summaries, dated by when they were reported, not run.
+The owner reported the program working in those two terminals, but did
+not record which programs, options, and checks were run, or a result
+for each check. The Windows row also does not record which window
+hosted Command Prompt (Windows Terminal or the console host).
+
+Until per-check results exist, the behaviors below rest on cited
+documentation and are unverified in every terminal (research §E,
+"Unverified"):
 - the enter and exit sequences (R26);
 - deferred wrap at the last column (R33);
 - the alternate screen (mode 1049);
 - synchronized output (mode 2026, R34);
 - the Windows console modes (R28).
 
-Input and restoration (feature 002) are also unverified in a real
-terminal, on every platform:
+The same holds for input and restoration (feature 002):
 - what each terminal sends for keys, mouse, paste, and focus;
 - whether it honors the mouse, paste, and focus modes;
 - restoration after closing the window;
-- all of input and restoration on Windows. The console input path, the
-  console control handler, the unhandled-exception filter, and the
-  `SIGABRT` handler have been cross-built but not run (R113).
+- on Windows, the console input path, the console control handler, the
+  unhandled-exception filter, and the `SIGABRT` handler (R113). In the
+  Windows row, closing the window was reported to work ("closing
+  seemed fine too"). Whether the input path, the crash paths, and
+  Ctrl+C with input off were exercised was not recorded.
 
 ## Automated platforms
 

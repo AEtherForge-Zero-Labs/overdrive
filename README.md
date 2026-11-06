@@ -19,8 +19,9 @@ following:
 
 - terminal lifecycle:
   - the process's own console (the system backend). POSIX and Windows
-    implementations exist; neither has been observed in a real terminal
-    yet;
+    implementations exist. The owner has seen both work: WezTerm on
+    macOS, and Command Prompt on Windows 11 (see
+    [`docs/compatibility.md`](docs/compatibility.md));
   - a headless backend that delivers output to a callback, for tests;
 - a terminal-cell canvas with truecolor styles and Unicode-aware widths;
 - drawing with clipping: fill, text, and boxes in five border styles;
@@ -52,9 +53,10 @@ provides the following:
   [spec](specs/002-input-restore/spec.md) lists them, and
   `terminal.h` repeats the list at `restore_on_exit`.
 
-The pty tests show restoration on Linux and macOS. Windows input and
-restoration are cross-built but not run: Wine runs only the headless
-tests and the redirected-stdout path. See
+The pty tests show restoration on Linux and macOS. On Windows, CI
+only cross-builds input and restoration: Wine runs only the headless
+tests and the redirected-stdout path. On Windows 11, the owner
+reported that closing the window "seemed fine". See
 [`docs/compatibility.md`](docs/compatibility.md). Layout, motion, and
 widgets are later features, each specified when a consumer needs it.
 
