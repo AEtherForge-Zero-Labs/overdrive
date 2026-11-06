@@ -282,13 +282,33 @@ if(UNIX)
         "ASAN_OPTIONS=set:${restore_signal_options};UBSAN_OPTIONS=set:${restore_signal_options}")
 endif()
 
-# The vendored route (specs/003-packaging, R208): each test configures,
-# builds, and runs tests/consumer as a separate project with this build's
-# settings. The command is a script path, not a target, so CTest does not
-# prepend the emulator; the script runs the program through it. The
+# The vendored and installed routes (specs/003-packaging, R208): each
+# test configures, builds, and runs tests/consumer as a separate project
+# with this build's settings; consumer_installed first installs this
+# build, and exists only when its install rules do. The command is a
+# script path, not a target, so CTest does not prepend the emulator; the
+# script runs the program through it. The
 # system name and processor are forwarded only when cross compiling:
 # setting CMAKE_SYSTEM_NAME marks a build as cross.
-set(consumer_settings "set(consumer_generator [==[${CMAKE_GENERATOR}]==])\n")
+string(CONCAT consumer_settings "set(consumer_generator [==[${CMAKE_GENERATOR}]==])\n"
+    "set(consumer_executable_suffix [==[${CMAKE_EXECUTABLE_SUFFIX}]==])\n")
+# The install layout and the library's file names, for the installed
+# route's file list (R211).
+if(OVERDRIVE_INSTALL)
+    if(WIN32 AND BUILD_SHARED_LIBS)
+        set(consumer_runtime_dir "${CMAKE_INSTALL_BINDIR}")
+    else()
+        set(consumer_runtime_dir "${CMAKE_INSTALL_LIBDIR}")
+    endif()
+    string(APPEND consumer_settings
+        "set(consumer_install_libdir [==[${CMAKE_INSTALL_LIBDIR}]==])\n"
+        "set(consumer_install_bindir [==[${CMAKE_INSTALL_BINDIR}]==])\n"
+        "set(consumer_install_includedir [==[${CMAKE_INSTALL_INCLUDEDIR}]==])\n"
+        "set(consumer_install_datarootdir [==[${CMAKE_INSTALL_DATAROOTDIR}]==])\n"
+        "set(consumer_public_headers [==[${overdrive_public_headers}]==])\n"
+        "set(consumer_library_file [==[${consumer_runtime_dir}/$<TARGET_FILE_NAME:overdrive>]==])\n"
+        "set(consumer_library_linker_file [==[${CMAKE_INSTALL_LIBDIR}/$<TARGET_LINKER_FILE_NAME:overdrive>]==])\n")
+endif()
 set(consumer_forwarded CMAKE_MAKE_PROGRAM CMAKE_TOOLCHAIN_FILE CMAKE_C_COMPILER
     CMAKE_BUILD_TYPE BUILD_SHARED_LIBS CMAKE_C_FLAGS CMAKE_EXE_LINKER_FLAGS
     CMAKE_SHARED_LINKER_FLAGS CMAKE_FIND_ROOT_PATH_MODE_PROGRAM
@@ -302,11 +322,17 @@ foreach(name IN LISTS consumer_forwarded)
             "set(forward_${name} [==[${${name}}]==])\nlist(APPEND forward_names ${name})\n")
     endif()
 endforeach()
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/consumer_settings.cmake" "${consumer_settings}")
-foreach(consumer_mode IN ITEMS vendored duplicate)
+file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/consumer_settings.cmake"
+    CONTENT "${consumer_settings}")
+set(consumer_modes vendored duplicate)
+if(OVERDRIVE_INSTALL)
+    list(APPEND consumer_modes installed)
+endif()
+foreach(consumer_mode IN LISTS consumer_modes)
     add_test(NAME "consumer_${consumer_mode}" COMMAND "${CMAKE_COMMAND}"
         "-DMODE=${consumer_mode}"
         "-DOVERDRIVE_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
+        "-DOVERDRIVE_BUILD_DIR=${PROJECT_BINARY_DIR}"
         "-DCONSUMER_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/consumer"
         "-DWORK_DIR=${PROJECT_BINARY_DIR}/consumer"
         "-DSETTINGS=${CMAKE_CURRENT_BINARY_DIR}/consumer_settings.cmake"

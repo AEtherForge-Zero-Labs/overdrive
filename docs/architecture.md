@@ -1,10 +1,10 @@
 # Overdrive Architecture
 
-> **Status: implemented (features `001-render-core` and
-> `002-input-restore`), experimental 0.x.**
+> **Status: implemented (features `001-render-core`,
+> `002-input-restore`, and `003-packaging`), experimental 0.x.**
 > This describes the code on `main`. Every number below is a measurement,
-> cited with how it was taken (Art. XV). Behavior in real terminals is not
-> yet observed; see [compatibility.md](compatibility.md).
+> cited with how it was taken (Art. XV). What has been observed in real
+> terminals, and what has not, is in [compatibility.md](compatibility.md).
 
 ## Layers
 
@@ -224,6 +224,46 @@ following through the public API, with a counting allocator:
 - 0 allocator calls over the 100 frames after a resizing frame;
 - at three sizes, four color depths, and with synchronized output on
   and off (R47).
+
+## Packaging
+
+Feature 003 ([`specs/003-packaging/`](../specs/003-packaging/)) gives
+another CMake project two routes to the same target,
+`overdrive::overdrive`:
+- **From the source tree**, with `add_subdirectory`. Examples and
+  benchmarks default to off. Tests and install rules default to on only
+  when Overdrive is the top-level project (`PROJECT_IS_TOP_LEVEL`,
+  R201, R212). A
+  second copy in one build, or another target named `overdrive`, stops
+  configuration (R203).
+- **From an installed copy**, with `find_package(overdrive)`. The
+  install rules (`OVERDRIVE_INSTALL`) write the headers, the library,
+  an exported target set, a package config, and a version file. The
+  version file accepts the same major and minor version only
+  (`SameMinorVersion`, R205). The two license files go to
+  `share/doc/overdrive` (R207). The package files name no build-time
+  path, so the prefix can be moved (R206).
+
+The public headers are named once, in `overdrive_public_headers` in the
+top-level `CMakeLists.txt` (R204). The same list builds the header file
+set that is installed, drives the header self-containment checks, and
+gives the installed-route test the headers it requires. A header added
+there is installed and checked without another edit.
+
+Three tests build a separate minimal consumer project with
+`-Wall -Wextra -Wpedantic -Werror` (R208, R209):
+- `consumer_vendored`: the source route. It checks what linking adds,
+  the cache entries Overdrive creates, the targets it defines, and that
+  the consumer's install holds only the consumer's program.
+- `consumer_duplicate`: both refusals, with their messages.
+- `consumer_installed`: the installed route. It checks the installed
+  files (R211), the license files' hashes, and that the package files
+  name neither the source tree nor the build tree. It then moves the
+  prefix, builds and runs the consumer against the moved copy, and
+  checks that 0.2 and 0.0 are refused.
+
+The consumer contract is
+[`contracts/consumer.md`](../specs/003-packaging/contracts/consumer.md).
 
 ## Measurements
 

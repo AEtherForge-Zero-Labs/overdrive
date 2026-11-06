@@ -108,6 +108,35 @@ list(TRANSFORM overdrive_public_headers PREPEND "include/overdrive/"
 target_sources(overdrive PUBLIC FILE_SET HEADERS BASE_DIRS include
     FILES ${overdrive_public_header_files})
 
+# Install rules (R205–R207), off when vendored (R212). Before tests/,
+# which reads the install layout for the installed-route test.
+option(OVERDRIVE_INSTALL "Generate Overdrive's install rules" ${PROJECT_IS_TOP_LEVEL})
+if(OVERDRIVE_INSTALL)
+    include(GNUInstallDirs)
+    include(CMakePackageConfigHelpers)
+    set(overdrive_package_dir "${CMAKE_INSTALL_LIBDIR}/cmake/overdrive")
+    install(TARGETS overdrive EXPORT overdrive-targets
+        RUNTIME LIBRARY ARCHIVE
+        FILE_SET HEADERS
+        INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+    install(EXPORT overdrive-targets NAMESPACE overdrive::
+        DESTINATION "${overdrive_package_dir}")
+    configure_package_config_file(cmake/overdrive-config.cmake.in
+        "${PROJECT_BINARY_DIR}/overdrive-config.cmake"
+        INSTALL_DESTINATION "${overdrive_package_dir}")
+    # 0.x: a request is met only by the same major and minor version.
+    write_basic_package_version_file("${PROJECT_BINARY_DIR}/overdrive-config-version.cmake"
+        VERSION "${PROJECT_VERSION}" COMPATIBILITY SameMinorVersion)
+    install(FILES "${PROJECT_BINARY_DIR}/overdrive-config.cmake"
+        "${PROJECT_BINARY_DIR}/overdrive-config-version.cmake"
+        DESTINATION "${overdrive_package_dir}")
+    # Fixed doc/overdrive, never CMAKE_INSTALL_DOCDIR: a vendoring
+    # consumer's value would be inherited (R207).
+    install(FILES LICENSE DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/doc/overdrive")
+    install(FILES third_party/ucd/LICENSE RENAME LICENSE-UCD
+        DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/doc/overdrive")
+endif()
+
 if(OVERDRIVE_BUILD_TESTS)
     enable_testing()
     if(CMAKE_CROSSCOMPILING)
