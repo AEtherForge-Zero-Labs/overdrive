@@ -23,6 +23,10 @@ Sources, all CMake 3.28 documentation, the baseline minimum:
   https://cmake.org/cmake/help/v3.28/command/install.html
 - [GENEX] generator expressions,
   https://cmake.org/cmake/help/v3.28/manual/cmake-generator-expressions.7.html
+- [CMAKE] the `cmake` command line, including `cmake -E`,
+  https://cmake.org/cmake/help/v3.28/manual/cmake.1.html
+- [CMAKE_PROJECT_VERSION]
+  https://cmake.org/cmake/help/v3.28/variable/CMAKE_PROJECT_VERSION.html
 
 ## A. Clarifications carried in from the spec
 
@@ -54,9 +58,9 @@ unsupported.
 - **Decision**: `CMAKE_RUNTIME_OUTPUT_DIRECTORY` is set only when
   Overdrive is the top-level project. The in-source check compares
   `PROJECT_SOURCE_DIR` with `PROJECT_BINARY_DIR`, not the `CMAKE_*`
-  pair. Nothing else changes: warnings are already private through
-  `ovd_target_warnings`, and `enable_testing()` runs only when tests are
-  on.
+  pair. Warnings are already private through `ovd_target_warnings`, and
+  `enable_testing()` runs only when tests are on. The version given to
+  `project()` also leaked into the consumer's cache; R213 removes it.
 - **Rationale**: FR-003. The output directory is the one setting in the
   top-level `CMakeLists.txt` that describes the whole build tree rather
   than Overdrive's targets. VERIFIED by reading the file. A variable set
@@ -257,9 +261,13 @@ unsupported.
   terminal, so the test runs in CI and under Wine (Art. V). [GENEX]:
   `TARGET_RUNTIME_DLLS` (new in 3.21) lists a target's runtime DLLs
   from its transitive shared dependencies, and is empty "on non-DLL
-  platforms". VERIFIED. The copy is guarded by `WIN32` anyway, because
-  whether a copy with an empty file list fails is ASSUMED. The same
-  step is what README recommends to consumers (FR-015).
+  platforms". VERIFIED. The list is also empty for a static Windows
+  build, and `cmake -E copy_if_different` given only a destination
+  fails. OVD-22 observed this on CMake 4.2.3. So the step uses the form
+  [GENEX] shows, `cmake -E copy -t <dir> <dlls>`. [CMAKE] gives `-t` as
+  new in 3.26. That copy exits 0 with no files (observed on 4.2.3; not
+  documented, so ASSUMED for 3.28). It stays guarded by `WIN32`. The
+  same step is what README recommends to consumers (FR-015).
 
 ### R210 — Static link dependencies
 
@@ -304,6 +312,28 @@ unsupported.
 - **Alternatives**: install rules always, which is the common
   open-source default. Rejected: they put Overdrive's files into every
   vendoring consumer's install, unasked.
+
+### R213 — The version is not given to `project()`
+
+- **Decision**: `project(overdrive LANGUAGES C)`, followed by
+  `set(PROJECT_VERSION 0.1.0)` and `set(PROJECT_VERSION_MAJOR 0)`.
+  Found while implementing (OVD-22).
+- **Rationale**: FR-003. When the consumer's own `project()` gives no
+  version, `project(overdrive VERSION 0.1.0)` in a subproject writes
+  `CMAKE_PROJECT_VERSION`, `_MAJOR`, `_MINOR`, `_PATCH`, and `_TWEAK`
+  into the consumer's cache, as `STATIC` entries with Overdrive's
+  version. The consumer's cache-diff check caught it on the first run.
+  A minimal two-project reproduction confirmed it on CMake 4.2.3, with
+  and without the `VERSION` argument. [CMAKE_PROJECT_VERSION] says the
+  variable holds the version "specified in the top level
+  CMakeLists.txt", so a consumer reading it would get Overdrive's
+  version. Behavior on 3.28 is INFERRED to be the same; CI runs the
+  check on its own CMake. Setting the variables by hand gives the
+  library's `VERSION` and `SOVERSION` and the later package version
+  file the same values.
+- **Alternatives**: allow `CMAKE_PROJECT_VERSION*` in the cache check.
+  Rejected: the leaked value is wrong for the consumer, so allowing it
+  would weaken the check (Art. XI).
 
 ## C. Tensions
 
