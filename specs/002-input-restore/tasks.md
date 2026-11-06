@@ -76,8 +76,8 @@ test_restore_pty` on Linux and macOS.
 
 ### OVD-21 Document the implemented state [P] (depends on OVD-19)
 
-- [ ] T123 [P] Update `docs/architecture.md` and `README.md`: input and abnormal-exit restoration from planned to implemented, the process-wide handler exception (spec FR-036) and what is not covered (FR-034), with measured numbers only (Art. XV)
-- [ ] T124 [P] Update `docs/compatibility.md`: what the pty tests show per platform; Windows and real terminals as UNVERIFIED until the checklist is run
+- [x] T123 [P] Update `docs/architecture.md` and `README.md`: input and abnormal-exit restoration from planned to implemented, the process-wide handler exception (spec FR-036) and what is not covered (FR-034), with measured numbers only (Art. XV)
+- [x] T124 [P] Update `docs/compatibility.md`: what the pty tests show per platform; Windows and real terminals as UNVERIFIED until the checklist is run
 
 ## Dependencies
 
