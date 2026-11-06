@@ -1,7 +1,26 @@
 cmake_minimum_required(VERSION 3.28)
-project(overdrive VERSION 0.1.0 LANGUAGES C)
+# The version is set below, not by project(VERSION): as a subproject,
+# that would also write CMAKE_PROJECT_VERSION* into the consumer's cache
+# whenever the consumer's own project() gives no version (R213).
+project(overdrive LANGUAGES C)
+set(PROJECT_VERSION 0.1.0)
+set(PROJECT_VERSION_MAJOR 0)
 
-if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
+# One copy per build, and the name overdrive is Overdrive's (R203). A
+# global property starts empty on every configure, so a re-run passes.
+get_property(overdrive_first_source_dir GLOBAL PROPERTY OVERDRIVE_SOURCE_DIR)
+if(overdrive_first_source_dir)
+    message(FATAL_ERROR "Overdrive was added twice: first from "
+        "${overdrive_first_source_dir}, again from ${PROJECT_SOURCE_DIR}")
+endif()
+if(TARGET overdrive)
+    get_target_property(overdrive_existing_dir overdrive SOURCE_DIR)
+    message(FATAL_ERROR "a target named overdrive already exists (defined in "
+        "${overdrive_existing_dir}); Overdrive needs that name")
+endif()
+set_property(GLOBAL PROPERTY OVERDRIVE_SOURCE_DIR "${PROJECT_SOURCE_DIR}")
+
+if(PROJECT_SOURCE_DIR STREQUAL PROJECT_BINARY_DIR)
     message(FATAL_ERROR "Use an out-of-source build through CMakePresets.json.")
 endif()
 
@@ -23,7 +42,10 @@ endif()
 set(CMAKE_C_STANDARD 23)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+# A layout for the whole build tree: a consumer's choice when vendored (R202).
+if(PROJECT_IS_TOP_LEVEL)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+endif()
 
 if(CMAKE_GENERATOR MATCHES "^Ninja")
     execute_process(COMMAND "${CMAKE_MAKE_PROGRAM}" --version
@@ -56,7 +78,8 @@ if(NOT overdrive_has_c23)
 endif()
 
 option(BUILD_SHARED_LIBS "Build Overdrive as a shared library" OFF)
-option(OVERDRIVE_BUILD_TESTS "Build Overdrive's tests" ON)
+# Off when vendored, so a consumer builds none of Overdrive's tests (R201).
+option(OVERDRIVE_BUILD_TESTS "Build Overdrive's tests" ${PROJECT_IS_TOP_LEVEL})
 option(OVERDRIVE_BUILD_EXAMPLES "Build available Overdrive examples" OFF)
 
 function(ovd_target_warnings target)
@@ -66,8 +89,6 @@ endfunction()
 add_library(overdrive src/core.c)
 add_library(overdrive::overdrive ALIAS overdrive)
 target_compile_features(overdrive PUBLIC c_std_23)
-target_include_directories(overdrive PUBLIC
-    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
 target_compile_definitions(overdrive PRIVATE OVERDRIVE_BUILDING)
 set_target_properties(overdrive PROPERTIES
     VERSION "${PROJECT_VERSION}"
@@ -79,10 +100,13 @@ if(BUILD_SHARED_LIBS)
 endif()
 ovd_target_warnings(overdrive)
 
+# The public headers, as one PUBLIC file set: its base directory is the
+# include directory of the build tree (R204). tests/ reads the list too.
 set(overdrive_public_headers core.h terminal.h render.h input.h overdrive.h)
-foreach(header IN LISTS overdrive_public_headers)
-    target_sources(overdrive PRIVATE "include/overdrive/${header}")
-endforeach()
+list(TRANSFORM overdrive_public_headers PREPEND "include/overdrive/"
+    OUTPUT_VARIABLE overdrive_public_header_files)
+target_sources(overdrive PUBLIC FILE_SET HEADERS BASE_DIRS include
+    FILES ${overdrive_public_header_files})
 
 if(OVERDRIVE_BUILD_TESTS)
     enable_testing()

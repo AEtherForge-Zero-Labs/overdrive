@@ -281,3 +281,37 @@ if(UNIX)
     set_tests_properties(test_restore_pty PROPERTIES ENVIRONMENT_MODIFICATION
         "ASAN_OPTIONS=set:${restore_signal_options};UBSAN_OPTIONS=set:${restore_signal_options}")
 endif()
+
+# The vendored route (specs/003-packaging, R208): each test configures,
+# builds, and runs tests/consumer as a separate project with this build's
+# settings. The command is a script path, not a target, so CTest does not
+# prepend the emulator; the script runs the program through it. The
+# system name and processor are forwarded only when cross compiling:
+# setting CMAKE_SYSTEM_NAME marks a build as cross.
+set(consumer_settings "set(consumer_generator [==[${CMAKE_GENERATOR}]==])\n")
+set(consumer_forwarded CMAKE_MAKE_PROGRAM CMAKE_TOOLCHAIN_FILE CMAKE_C_COMPILER
+    CMAKE_BUILD_TYPE BUILD_SHARED_LIBS CMAKE_C_FLAGS CMAKE_EXE_LINKER_FLAGS
+    CMAKE_SHARED_LINKER_FLAGS CMAKE_FIND_ROOT_PATH_MODE_PROGRAM
+    CMAKE_CROSSCOMPILING_EMULATOR CMAKE_FIND_ROOT_PATH)
+if(CMAKE_CROSSCOMPILING)
+    list(APPEND consumer_forwarded CMAKE_SYSTEM_NAME CMAKE_SYSTEM_PROCESSOR)
+endif()
+foreach(name IN LISTS consumer_forwarded)
+    if(DEFINED "${name}" AND NOT "${${name}}" STREQUAL "")
+        string(APPEND consumer_settings
+            "set(forward_${name} [==[${${name}}]==])\nlist(APPEND forward_names ${name})\n")
+    endif()
+endforeach()
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/consumer_settings.cmake" "${consumer_settings}")
+foreach(consumer_mode IN ITEMS vendored duplicate)
+    add_test(NAME "consumer_${consumer_mode}" COMMAND "${CMAKE_COMMAND}"
+        "-DMODE=${consumer_mode}"
+        "-DOVERDRIVE_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
+        "-DCONSUMER_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/consumer"
+        "-DWORK_DIR=${PROJECT_BINARY_DIR}/consumer"
+        "-DSETTINGS=${CMAKE_CURRENT_BINARY_DIR}/consumer_settings.cmake"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/consumer/run_consumer.cmake")
+    # Takes precedence over the presets' 60 s default; the vendored route
+    # compiles the library again.
+    set_tests_properties("consumer_${consumer_mode}" PROPERTIES TIMEOUT 300)
+endforeach()
