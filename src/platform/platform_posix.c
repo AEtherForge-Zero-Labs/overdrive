@@ -416,7 +416,8 @@ static bool runs_handler(const struct sigaction *action)
  *   delivery, uc_sigmask of the interrupted context, so Overdrive's own
  *   sa_mask (every handled signal) does not reach the handler (FR-031).
  *   Without a context the mask is left as it is.
- * sigaction, sigaddset, and pthread_sigmask are on XSH 2.4.3's list;
+ * sigaction, sigaddset, sigismember, sigemptyset, and pthread_sigmask
+ * are on XSH 2.4.3's list;
  * ucontext_t is from <signal.h>. On return, the kernel puts
  * back the mask from before this handler. */
 static void call_previous(const struct sigaction *action, int signal, siginfo_t *info,
@@ -433,10 +434,23 @@ static void call_previous(const struct sigaction *action, int signal, siginfo_t 
         if ((action->sa_flags & (SA_NODEFER | SA_RESETHAND)) == 0) {
             sigaddset(&added, signal);
         }
-        /* The union, in two steps: the mask at delivery, then SIG_BLOCK
-         * adds the rest (POSIX has no set union). */
-        pthread_sigmask(SIG_SETMASK, &interrupted->uc_sigmask, nullptr);
+        /* This handler runs with the mask at delivery plus its own sa_mask,
+         * which is every handled signal. Setting uc_sigmask first would
+         * briefly unblock the signal and the application's sa_mask, and
+         * XSH pthread_sigmask delivers a
+         * pending unblocked signal "before pthread_sigmask() returns". So
+         * nothing the target blocks is ever unblocked: block the additions
+         * first, then unblock the handled signals in neither set. */
+        sigset_t released;
+        sigemptyset(&released);
+        for (size_t i = 0; i < HANDLED_COUNT; ++i) {
+            if (sigismember(&interrupted->uc_sigmask, HANDLED[i]) == 0
+                && sigismember(&added, HANDLED[i]) == 0) {
+                sigaddset(&released, HANDLED[i]);
+            }
+        }
         pthread_sigmask(SIG_BLOCK, &added, nullptr);
+        pthread_sigmask(SIG_UNBLOCK, &released, nullptr);
     }
     if ((action->sa_flags & SA_SIGINFO) != 0) {
         action->sa_sigaction(signal, info, context);

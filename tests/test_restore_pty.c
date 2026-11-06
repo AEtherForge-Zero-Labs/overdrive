@@ -344,8 +344,9 @@ static bool subject_term_before(int)
  * action would install (XSH sigaction): the mask at delivery, plus its
  * sa_mask (here SIGUSR2), plus the signal unless SA_NODEFER. Overdrive's
  * own sa_mask, which blocks every handled signal, must not leak into it,
- * so SIGTERM and SIGQUIT stay deliverable. The handler reports 'm' when
- * the mask is right, else 'b'. */
+ * so SIGTERM and SIGQUIT stay deliverable. SIGHUP is blocked before the
+ * signal is sent, so the mask at delivery (uc_sigmask) must keep it
+ * blocked. The handler reports 'm' when the mask is right, else 'b'. */
 static volatile sig_atomic_t mask_signal;
 static volatile sig_atomic_t mask_nodefer;
 
@@ -354,7 +355,7 @@ static void application_mask(int signal)
     sigset_t now;
     /* The subject is single-threaded, where sigprocmask is specified. */
     const bool read = sigprocmask(SIG_BLOCK, nullptr, &now) == 0;
-    const bool right = read && sigismember(&now, SIGUSR2) == 1
+    const bool right = read && sigismember(&now, SIGUSR2) == 1 && sigismember(&now, SIGHUP) == 1
                        && sigismember(&now, SIGTERM) == 0 && sigismember(&now, SIGQUIT) == 0
                        && sigismember(&now, signal) == (mask_nodefer ? 0 : 1);
     say(right ? 'm' : 'b');
@@ -376,6 +377,10 @@ static bool subject_mask(int parameter)
     if (!create(config(true, true), &terminal)) {
         return false;
     }
+    sigset_t hangup;
+    sigemptyset(&hangup);
+    sigaddset(&hangup, SIGHUP);
+    sigprocmask(SIG_BLOCK, &hangup, nullptr);
     kill(getpid(), mask_signal);
     ovd_terminal_destroy(terminal);
     return true;
