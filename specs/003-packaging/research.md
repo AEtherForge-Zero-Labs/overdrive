@@ -217,7 +217,7 @@ unsupported.
   - macOS: `debug`, `shared`, `sanitize`;
   - Wine: `windows-cross-debug` and `windows-cross-shared`.
 
-  (VERIFIED in `docs/compatibility.md`.) So two tests cover every
+  (VERIFIED in `docs/compatibility.md`.) So three tests cover every
   platform, static and shared, with no change to `.github/`, which
   CODEOWNERS reserves for the owner. A test's own `TIMEOUT` takes
   precedence over the preset's 60 s default. This is ASSUMED: the review

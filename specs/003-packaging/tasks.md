@@ -30,6 +30,10 @@ Independent test: `ctest --preset debug -R '^consumer_(vendored|duplicate)$'`.
   - The project needs CMake 3.28 and C23 without extensions. It sets
     `add_compile_options(-Wall -Wextra -Wpedantic -Werror)` before
     adding Overdrive (SC-005).
+  - It calls `include(GNUInstallDirs)` before adding Overdrive, as many
+    consumers do. Its `CMAKE_INSTALL_*` cache entries then exist before
+    the cache diff, and the inherited `CMAKE_INSTALL_DOCDIR` case of
+    R207 is exercised.
   - The cache variable `OVERDRIVE_CONSUMER_ROUTE` takes one of three
     values:
     - `vendored` calls `add_subdirectory` on `OVERDRIVE_SOURCE_DIR` with
@@ -166,7 +170,9 @@ Goal: install once, then find the package by name, from a moved prefix
   step 1 or 2 on today's tree, and record the failure. The FR-016 step
   passes today, since no install rules exist. Watch it fail by running
   T208's rules with `OVERDRIVE_INSTALL` forced ON for the vendored
-  consumer, then revert. (Depends on OVD-22.)
+  consumer, then revert. The watched failure must name the install
+  step, not configure: the consumer's own `include(GNUInstallDirs)`
+  (T201) keeps the cache diff clean. (Depends on OVD-22.)
 - [ ] T208 [US2] In `CMakeLists.txt`, add `option(OVERDRIVE_INSTALL
   "Generate Overdrive's install rules" ${PROJECT_IS_TOP_LEVEL})`
   (R212). Inside `if(OVERDRIVE_INSTALL)`, add the install rules (R205):
