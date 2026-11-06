@@ -340,6 +340,47 @@ static bool subject_term_before(int)
     return true;
 }
 
+/* FR-031 and FR-032: the application's handler runs with the mask its own
+ * action would install (XSH sigaction): the mask at delivery, plus its
+ * sa_mask (here SIGUSR2), plus the signal unless SA_NODEFER. Overdrive's
+ * own sa_mask, which blocks every handled signal, must not leak into it,
+ * so SIGTERM and SIGQUIT stay deliverable. The handler reports 'm' when
+ * the mask is right, else 'b'. */
+static volatile sig_atomic_t mask_signal;
+static volatile sig_atomic_t mask_nodefer;
+
+static void application_mask(int signal)
+{
+    sigset_t now;
+    /* The subject is single-threaded, where sigprocmask is specified. */
+    const bool read = sigprocmask(SIG_BLOCK, nullptr, &now) == 0;
+    const bool right = read && sigismember(&now, SIGUSR2) == 1
+                       && sigismember(&now, SIGTERM) == 0 && sigismember(&now, SIGQUIT) == 0
+                       && sigismember(&now, signal) == (mask_nodefer ? 0 : 1);
+    say(right ? 'm' : 'b');
+}
+
+/* parameter: the signal, plus 0x100 for SA_NODEFER. */
+static bool subject_mask(int parameter)
+{
+    mask_signal = parameter & 0xFF;
+    mask_nodefer = (parameter & 0x100) != 0;
+    struct sigaction action = {
+        .sa_handler = application_mask,
+        .sa_flags = mask_nodefer ? SA_NODEFER : 0,
+    };
+    sigemptyset(&action.sa_mask);
+    sigaddset(&action.sa_mask, SIGUSR2);
+    sigaction(mask_signal, &action, nullptr);
+    OvdTerminal *terminal = nullptr;
+    if (!create(config(true, true), &terminal)) {
+        return false;
+    }
+    kill(getpid(), mask_signal);
+    ovd_terminal_destroy(terminal);
+    return true;
+}
+
 static bool is_application_term(const struct sigaction *action)
 {
     return (action->sa_flags & SA_SIGINFO) == 0 && action->sa_handler == application_term;
@@ -1173,6 +1214,19 @@ static bool case_exits_reporting(Body body, char letter)
     return true;
 }
 
+static bool case_mask(int parameter)
+{
+    Outcome subject;
+    CHECK(run(&(Run){ .name = "subject", .body = subject_mask, .parameter = parameter,
+                      .size = SMALL },
+              &subject));
+    CHECK(status_is_exit_0(subject.ending.status));
+    CHECK(reported(&subject, 'm'));
+    CHECK(!reported(&subject, 'b'));
+    CHECK(modes_restored(&subject));
+    return true;
+}
+
 static bool case_term_after(int)
 {
     return case_exits_reporting(subject_term_after, 's');
@@ -1389,6 +1443,9 @@ int main(void)
     ok = report_case("partial frame", 0, case_frame) && ok;
     ok = report_case("SIGTERM during create", 0, case_term_during_create) && ok;
     ok = report_case("SIGTERM handler before create", 0, case_term_before) && ok;
+    ok = report_case("application handler's mask", SIGINT, case_mask) && ok;
+    ok = report_case("application handler's mask", SIGABRT, case_mask) && ok;
+    ok = report_case("application handler's mask, SA_NODEFER", SIGINT | 0x100, case_mask) && ok;
     ok = report_case("SIGTERM handler after create", 0, case_term_after) && ok;
     ok = report_case("SIGHUP ignored", 0, case_hup_ignored) && ok;
     ok = report_case("restore_on_exit false", 0, case_no_restore) && ok;

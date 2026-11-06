@@ -406,11 +406,19 @@ static bool runs_handler(const struct sigaction *action)
 /* Calls the previous handler as its own action would have run it. Its
  * action is not the installed one, so what the kernel does "on entry to
  * the signal handler" for its flags is done here (XSH sigaction; R121):
- * SA_RESETHAND resets the disposition to SIG_DFL, so a fault repeated or
- * re-raised from the handler takes the default action, not this handler
- * again; SA_NODEFER leaves the signal unblocked while it runs. Both calls
- * are on XSH 2.4.3's list. A reset slot is no longer Overdrive's, so
- * disarm leaves it at SIG_DFL, as without Overdrive. */
+ * - SA_RESETHAND resets the disposition to SIG_DFL, so a fault repeated
+ *   or re-raised from the handler takes the default action, not this
+ *   handler again. A reset slot is no longer Overdrive's, so disarm
+ *   leaves it at SIG_DFL, as without Overdrive.
+ * - The mask becomes what its action installs: "the union of the current
+ *   signal mask and the value of the sa_mask", then the signal "unless
+ *   SA_NODEFER or SA_RESETHAND is set". The current mask is the one at
+ *   delivery, uc_sigmask of the interrupted context, so Overdrive's own
+ *   sa_mask (every handled signal) does not reach the handler (FR-031).
+ *   Without a context the mask is left as it is.
+ * sigaction, sigaddset, and pthread_sigmask are on XSH 2.4.3's list;
+ * ucontext_t is from <signal.h>. On return, the kernel puts
+ * back the mask from before this handler. */
 static void call_previous(const struct sigaction *action, int signal, siginfo_t *info,
                           void *context)
 {
@@ -419,11 +427,16 @@ static void call_previous(const struct sigaction *action, int signal, siginfo_t 
         sigemptyset(&default_action.sa_mask);
         sigaction(signal, &default_action, nullptr);
     }
-    if ((action->sa_flags & SA_NODEFER) != 0) {
-        sigset_t only;
-        sigemptyset(&only);
-        sigaddset(&only, signal);
-        pthread_sigmask(SIG_UNBLOCK, &only, nullptr);
+    if (context != nullptr) {
+        const ucontext_t *interrupted = context;
+        sigset_t added = action->sa_mask;
+        if ((action->sa_flags & (SA_NODEFER | SA_RESETHAND)) == 0) {
+            sigaddset(&added, signal);
+        }
+        /* The union, in two steps: the mask at delivery, then SIG_BLOCK
+         * adds the rest (POSIX has no set union). */
+        pthread_sigmask(SIG_SETMASK, &interrupted->uc_sigmask, nullptr);
+        pthread_sigmask(SIG_BLOCK, &added, nullptr);
     }
     if ((action->sa_flags & SA_SIGINFO) != 0) {
         action->sa_sigaction(signal, info, context);
