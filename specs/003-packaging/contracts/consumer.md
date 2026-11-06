@@ -65,7 +65,7 @@ anything else is a defect (FR-010).
 
 | Path under the prefix | Contents |
 |---|---|
-| `include/overdrive/{core,terminal,render,input,overdrive}.h` | the public headers |
+| `include/overdrive/{core,terminal,render,input,widgets,overdrive}.h` | the public headers |
 | `<libdir>/` | the static library, or on POSIX the shared library and its version links |
 | `bin/` (Windows, shared) | the DLL |
 | `<libdir>/` (Windows, shared) | the import library |

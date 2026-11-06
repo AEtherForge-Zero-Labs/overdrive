@@ -341,3 +341,19 @@ foreach(consumer_mode IN LISTS consumer_modes)
     # compiles the library again.
     set_tests_properties("consumer_${consumer_mode}" PROPERTIES TIMEOUT 300)
 endforeach()
+
+# Widgets' shared pieces (004 OVD-25). The canvas read-back helper
+# (R319) sits on the screen model, so both tests link the replay library.
+# test_textfit compiles the fitter, the iterator it measures with, and the
+# widget helpers, which a shared build hides (R308-R310).
+ovd_add_test(test_textfit)
+target_sources(test_textfit PRIVATE support/canvas_screen.c
+    "${PROJECT_SOURCE_DIR}/src/textfit.c" "${PROJECT_SOURCE_DIR}/src/unicode.c"
+    "${PROJECT_SOURCE_DIR}/src/widget.c")
+target_include_directories(test_textfit PRIVATE "${PROJECT_BINARY_DIR}/generated")
+add_dependencies(test_textfit ovd_unicode_tables)
+target_link_libraries(test_textfit PRIVATE overdrive_vt_replay)
+# Public API only.
+ovd_add_test(test_widget)
+target_sources(test_widget PRIVATE support/canvas_screen.c)
+target_link_libraries(test_widget PRIVATE overdrive_vt_replay)

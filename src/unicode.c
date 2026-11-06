@@ -136,6 +136,33 @@ OvdUtf8Unit ovd_unicode_decode_utf8(const char *bytes, size_t available)
     return decode_utf8((const unsigned char *)bytes, available);
 }
 
+uint8_t ovd_unicode_encode_utf8(uint32_t code_point, char out[4])
+{
+    if ((code_point >= 0xD800 && code_point <= 0xDFFF) || code_point > 0x10FFFF) {
+        return 0;
+    }
+    if (code_point < 0x80) {
+        out[0] = (char)code_point;
+        return 1;
+    }
+    if (code_point < 0x800) {
+        out[0] = (char)(0xC0 | (code_point >> 6));
+        out[1] = (char)(0x80 | (code_point & 0x3F));
+        return 2;
+    }
+    if (code_point < 0x10000) {
+        out[0] = (char)(0xE0 | (code_point >> 12));
+        out[1] = (char)(0x80 | ((code_point >> 6) & 0x3F));
+        out[2] = (char)(0x80 | (code_point & 0x3F));
+        return 3;
+    }
+    out[0] = (char)(0xF0 | (code_point >> 18));
+    out[1] = (char)(0x80 | ((code_point >> 12) & 0x3F));
+    out[2] = (char)(0x80 | ((code_point >> 6) & 0x3F));
+    out[3] = (char)(0x80 | (code_point & 0x3F));
+    return 4;
+}
+
 /* The grapheme iterator's view: a truncated sequence is one more maximal
  * subpart, replaced like any other (R17). */
 static Unit decode(const unsigned char *bytes, size_t available)
