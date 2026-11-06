@@ -183,6 +183,52 @@ static bool control_signal(int parameter)
     return false;
 }
 
+/* R112, Create: an allocator that raises SIGTERM at its first call.
+ * Create allocates after it has changed the modes and before it arms the
+ * record, so the signal is raised on the creating thread in the window
+ * that reserve's blocking covers: it must wait until the record is armed,
+ * then restore. Without the blocking it would find the record unarmed
+ * and end the process with the modes changed. */
+static void *raise_on_first_allocate(void *context, size_t size)
+{
+    bool *raised = context;
+    if (!*raised) {
+        *raised = true;
+        raise(SIGTERM);
+    }
+    return malloc(size);
+}
+
+static void release_block(void *, void *block, size_t)
+{
+    free(block);
+}
+
+static bool subject_term_during_create(int)
+{
+    bool raised = false;
+    const OvdAllocator allocator = {
+        .allocate = raise_on_first_allocate,
+        .release = release_block,
+        .context = &raised,
+    };
+    OvdTerminalConfig c = config(true, true);
+    c.allocator = &allocator;
+    OvdTerminal *terminal = nullptr;
+    if (!create(c, &terminal)) {
+        return false;
+    }
+    say('x'); /* not reached: the held SIGTERM is delivered when create arms */
+    return false;
+}
+
+static bool control_term(int)
+{
+    raise(SIGTERM);
+    say('x');
+    return false;
+}
+
 /* US3 scenario 2: with input on, the keys arrive as Ctrl+C, Ctrl+\, and
  * Ctrl+Z (R105), and no signal is raised. */
 static bool subject_keys(int)
@@ -1087,6 +1133,23 @@ static bool case_frame(int)
     return true;
 }
 
+static bool case_term_during_create(int)
+{
+    Outcome control;
+    Outcome subject;
+    CHECK(run(&(Run){ .name = "control", .body = control_term, .size = SMALL }, &control));
+    CHECK(WIFSIGNALED(control.ending.status) && WTERMSIG(control.ending.status) == SIGTERM);
+    CHECK(run(&(Run){ .name = "subject", .body = subject_term_during_create, .size = SMALL },
+              &subject));
+    CHECK(same_status(&subject, &control));
+    CHECK(!reported(&subject, 'x'));
+    CHECK(modes_restored(&subject));
+    CHECK(count(LITERAL(ENTER_MARK)) == 1);
+    CHECK(count(LITERAL(CAN)) == 1);
+    CHECK(ends_with(LITERAL(EXIT_REPORTS_ALTERNATE)));
+    return true;
+}
+
 static bool case_term_before(int)
 {
     Outcome subject;
@@ -1311,6 +1374,7 @@ int main(void)
     ok = report_case("real fault", 0, case_signal) && ok;
     ok = report_case("keys", 0, case_keys) && ok;
     ok = report_case("partial frame", 0, case_frame) && ok;
+    ok = report_case("SIGTERM during create", 0, case_term_during_create) && ok;
     ok = report_case("SIGTERM handler before create", 0, case_term_before) && ok;
     ok = report_case("SIGTERM handler after create", 0, case_term_after) && ok;
     ok = report_case("SIGHUP ignored", 0, case_hup_ignored) && ok;
