@@ -90,9 +90,9 @@ What these runs show:
   printed it: "SA_RESETHAND crash handler returns" is SKIPPED, because
   the platform does not report the flag (R121, FR-034). On Linux the test
   fails instead of skipping that case. The Linux jobs of CI run
-  42140940176 on 2026-11-05 passed with that check in place, and so did
-  every later passing Linux job. That shows the case runs on Linux, and
-  that Linux reports the flag.
+  42140940176 on 2026-11-05 passed with that check in place. That shows
+  the case runs on Linux, and that Linux reports the flag. Any later
+  Linux job that passes with this check in place shows the same.
 - **A pty is not a terminal.** The pty tests show the bytes and modes
   Overdrive produces. They don't show how a terminal emulator decodes
   keys or displays the result.
