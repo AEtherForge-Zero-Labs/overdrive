@@ -1,0 +1,70 @@
+{
+  "schema": "overdrive-workgraph/1",
+  "feature": "004-widgets",
+  "spec": "specs/004-widgets/spec.md",
+  "contracts": "specs/004-widgets/contracts/include/overdrive/",
+  "protocol": "docs/process/swarm.md",
+  "shared_append_only": [
+    "CMakeLists.txt",
+    "tests/CMakeLists.txt"
+  ],
+  "frozen_after": {
+    "include/overdrive/": "OVD-25"
+  },
+  "issues": [
+    {
+      "id": "OVD-25", "title": "Widgets: contract freeze, shared helpers, text fitting",
+      "phase": 1, "tasks": ["T301","T302","T303","T304","T305","T306","T307","T308","T309"], "depends_on": ["OVD-23"],
+      "owns": ["include/overdrive/widgets.h","include/overdrive/overdrive.h","src/widget.h","src/widget.c","src/textfit.h","src/textfit.c","src/unicode.h","src/unicode.c","tests/test_headers.c","tests/test_unicode.c","tests/test_textfit.c","tests/test_widget.c","tests/support/canvas_screen.h","tests/support/canvas_screen.c"],
+      "requirements": ["FR-006","FR-008","FR-009","FR-010","FR-015","FR-021","SC-001"],
+      "proof": ["cmake --preset debug","cmake --build --preset debug","ctest --preset debug","cmake --preset shared","cmake --build --preset shared","ctest --preset shared","cmake --preset sanitize","cmake --build --preset sanitize","ctest --preset sanitize","cmake --preset windows-cross-debug","cmake --build --preset windows-cross-debug","ctest --preset windows-cross-debug"],
+      "tier": "opus",
+      "note": "cross-feature dependency: OVD-23 is 003's installed route, the last issue that owns CMakeLists.txt and tests/CMakeLists.txt outright (003 workgraph); owns the overdrive_public_headers line of CMakeLists.txt (not an append); contract freeze: include/overdrive/ changes after this need a contract-change issue; no stubs: list, table, and prompt functions stay undefined until their issues (plan.md, Workstreams)"
+    },
+    {
+      "id": "OVD-26", "title": "Widgets: list and menu",
+      "phase": 2, "tasks": ["T310","T311","T312"], "depends_on": ["OVD-25"],
+      "owns": ["src/list.h","src/list.c","tests/test_list.c"],
+      "requirements": ["FR-001","FR-002","FR-003","FR-004","FR-006","FR-007","FR-008","FR-009","FR-011","FR-012","FR-013","FR-014","FR-015","SC-001","SC-002","SC-004"],
+      "proof": ["ctest --preset debug -R ^test_list$","ctest --preset shared -R ^test_list$","ctest --preset sanitize -R ^test_list$","ctest --preset windows-cross-debug -R ^test_list$"],
+      "tier": "sonnet",
+      "note": "src/list.h declares ovd_list_correct for the table (R305); MVP with OVD-25"
+    },
+    {
+      "id": "OVD-27", "title": "Widgets: one-line prompt",
+      "phase": 2, "tasks": ["T313","T314","T315"], "depends_on": ["OVD-25"],
+      "owns": ["src/prompt.c","tests/test_prompt.c"],
+      "requirements": ["FR-001","FR-003","FR-004","FR-006","FR-008","FR-009","FR-016","FR-017","FR-018","FR-019","FR-020","SC-002"],
+      "proof": ["ctest --preset debug -R ^test_prompt$","ctest --preset shared -R ^test_prompt$","ctest --preset sanitize -R ^test_prompt$","ctest --preset windows-cross-debug -R ^test_prompt$"],
+      "tier": "opus",
+      "note": "parallel with OVD-26; grapheme editing by a scan from offset 0 with ovd_unicode_next_grapheme (R313)"
+    },
+    {
+      "id": "OVD-28", "title": "Widgets: table",
+      "phase": 3, "tasks": ["T316","T317","T318"], "depends_on": ["OVD-26"],
+      "owns": ["src/table.c","tests/test_table.c"],
+      "requirements": ["FR-001","FR-003","FR-004","FR-007","FR-008","FR-009","FR-021","FR-022","FR-023","SC-002","SC-004"],
+      "proof": ["ctest --preset debug -R ^test_table$","ctest --preset shared -R ^test_table$","ctest --preset sanitize -R ^test_table$","ctest --preset windows-cross-debug -R ^test_table$"],
+      "tier": "sonnet",
+      "note": "movement is ovd_list_handle_event with the row count; rows drawn after ovd_list_correct (R305)"
+    },
+    {
+      "id": "OVD-29", "title": "Widgets: fuzz and steady state",
+      "phase": 4, "tasks": ["T319","T320","T321"], "depends_on": ["OVD-26","OVD-27","OVD-28"],
+      "owns": ["tests/test_widget_fuzz.c","tests/test_steady_state.c"],
+      "requirements": ["FR-001","FR-002","FR-003","FR-004","FR-005","SC-003","SC-005"],
+      "proof": ["ctest --preset debug -R ^test_(widget_fuzz|steady_state)$","ctest --preset sanitize -R ^test_(widget_fuzz|steady_state)$","ctest --preset windows-cross-debug -R ^test_(widget_fuzz|steady_state)$"],
+      "tier": "opus",
+      "note": "measure the sanitize run time; above 60 s, give the test its own TIMEOUT, never a smaller count (R320, ASSUMED); show each oracle catching an injected fault"
+    },
+    {
+      "id": "OVD-30", "title": "Widgets: example, manual checklist, docs",
+      "phase": 5, "tasks": ["T322","T323","T324","T325"], "depends_on": ["OVD-29","OVD-24"],
+      "owns": ["examples/widget_demo.c","examples/CMakeLists.txt","docs/validation/manual-checklist.md","docs/architecture.md","README.md"],
+      "requirements": ["FR-010","SC-001"],
+      "proof": ["cmake --preset debug","cmake --build --preset debug","ctest --preset debug","python3 -I docs_form_check (CI docs-form-check)"],
+      "tier": "sonnet",
+      "note": "cross-feature dependency: OVD-24 is 003's docs issue, which owns README.md and docs/architecture.md; real-terminal steps are UNVERIFIED until a human runs Part 3 of the checklist; open a needs-human issue for it"
+    }
+  ]
+}
