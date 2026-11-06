@@ -30,17 +30,32 @@ Independent test: `ctest --preset debug -R '^consumer_(vendored|duplicate)$'`.
   - The project needs CMake 3.28 and C23 without extensions. It sets
     `add_compile_options(-Wall -Wextra -Wpedantic -Werror)` before
     adding Overdrive (SC-005).
-  - The cache variable `OVERDRIVE_CONSUMER_ROUTE` is `vendored` or
-    `duplicate`. `vendored` calls `add_subdirectory` on
-    `OVERDRIVE_SOURCE_DIR` with a binary directory. `duplicate` does it
-    twice, with two binary directories.
+  - The cache variable `OVERDRIVE_CONSUMER_ROUTE` takes one of three
+    values:
+    - `vendored` calls `add_subdirectory` on `OVERDRIVE_SOURCE_DIR` with
+      a binary directory;
+    - `duplicate` does it twice, with two binary directories;
+    - `collision` first defines its own `add_library(overdrive
+      INTERFACE)`, then adds Overdrive.
   - It gets and links Overdrive in exactly two lines, `add_subdirectory`
     and `target_link_libraries` (SC-001).
   - It links `overdrive::overdrive` only.
-  - After adding Overdrive, it stops configuration with
-    `message(FATAL_ERROR)` if its own directory's `COMPILE_OPTIONS`,
-    `CMAKE_RUNTIME_OUTPUT_DIRECTORY`, or `CMAKE_C_STANDARD` differ from
-    their values before the call (FR-003).
+  - After adding Overdrive, it checks the channels that can reach a
+    consumer, and stops configuration with `message(FATAL_ERROR)` naming
+    the failed check (R202, FR-003). Each check can fail on today's
+    tree or under a plausible regression:
+    - `overdrive`'s `INTERFACE_COMPILE_OPTIONS` is unset;
+    - its `INTERFACE_COMPILE_DEFINITIONS` is empty, or exactly
+      `OVERDRIVE_SHARED`;
+    - `get_cmake_property(CACHE_VARIABLES)` after the call, minus the
+      list from before it, contains only names matching `^OVERDRIVE_`,
+      `^overdrive_`, or `^BUILD_SHARED_LIBS$`.
+  - Target allowlist (SC-003): it collects `BUILDSYSTEM_TARGETS`
+    recursively over Overdrive's binary directory and its
+    `SUBDIRECTORIES`, and requires exactly `overdrive` and
+    `ovd_unicode_tables`. Any other target is an Overdrive test,
+    example, or benchmark leaking in. This does not depend on the
+    generator.
   - A `WIN32`-guarded post-build step copies
     `$<TARGET_RUNTIME_DLLS:consumer>` beside the program.
   - The program uses only the public API:
@@ -54,31 +69,35 @@ Independent test: `ctest --preset debug -R '^consumer_(vendored|duplicate)$'`.
 - [ ] T202 [US1] Write `tests/consumer/run_consumer.cmake` (R208), a
   `cmake -P` script taking `-DMODE=vendored|duplicate` and the outer
   build's settings as `-D` arguments.
-  - It configures `tests/consumer` into a fresh directory under the
-    outer build tree. It passes on the generator, the make program,
+  - It configures `tests/consumer` into a fresh directory of its own,
+    `<outer build>/consumer/<mode>`, so `ctest -j` cannot collide. It
+    passes on the generator, the make program, `CMAKE_TOOLCHAIN_FILE`,
     `CMAKE_C_COMPILER`, `CMAKE_BUILD_TYPE`, `BUILD_SHARED_LIBS`,
     `CMAKE_C_FLAGS`, `CMAKE_EXE_LINKER_FLAGS`,
     `CMAKE_SHARED_LINKER_FLAGS`, `CMAKE_SYSTEM_NAME`,
     `CMAKE_SYSTEM_PROCESSOR`, `CMAKE_FIND_ROOT_PATH_MODE_PROGRAM`, and
-    `CMAKE_CROSSCOMPILING_EMULATOR`, each only when set.
+    `CMAKE_CROSSCOMPILING_EMULATOR`, each only when set. It fails if
+    `CMAKE_FIND_ROOT_PATH` is set, since forwarding it is not designed
+    (R208).
   - It builds, then runs the program, through the emulator when one is
     set. It fails with `message(FATAL_ERROR)` naming the step that
-    failed: configure, build, target check, or run.
-  - The target check (SC-003): it lists the consumer build's targets
-    with `<make program> -t targets all` and fails on any Overdrive
-    test, example, or benchmark target. The names come from
-    `tests/CMakeLists.txt`, `examples/`, and `bench/`.
-  - For `duplicate`, success is a failed configure whose output contains
-    the R203 message.
+    failed: configure (which includes the consumer's own checks), build,
+    or run.
+  - Mode `duplicate` runs two configures, `duplicate` and `collision`.
+    Each must fail with its R203 message in the output: "added twice"
+    naming both directories, and "a target named overdrive already
+    exists".
   - Every external command runs with `execute_process` and an argument
     list, never a shell string (Art. XIII).
 - [ ] T203 [US1] Register `consumer_vendored` and `consumer_duplicate` in
   `tests/CMakeLists.txt`, each running `run_consumer.cmake` with
-  `TIMEOUT 300`. Run them and watch both fail on today's
-  `CMakeLists.txt`:
-  - `consumer_vendored` at the target check, since the tests default
-    ON;
-  - `consumer_duplicate` without the R203 message.
+  `TIMEOUT 300`. The command is `${CMAKE_COMMAND} -P <script>`, a path
+  and not a target, so CTest does not prepend the emulator. Run both and
+  watch them fail on today's `CMakeLists.txt`:
+  - `consumer_vendored` at configure, on the target allowlist, since the
+    tests default ON. The review of this plan saw
+    `overdrive;ovd_unicode_tables` with a `tests` subdirectory;
+  - `consumer_duplicate` without either R203 message.
 
   Record both failures for the PR. (Depends on T201, T202.)
 - [ ] T204 [US1] In `CMakeLists.txt`:
@@ -86,9 +105,12 @@ Independent test: `ctest --preset debug -R '^consumer_(vendored|duplicate)$'`.
   - set `CMAKE_RUNTIME_OUTPUT_DIRECTORY` only when
     `PROJECT_IS_TOP_LEVEL`, and compare `PROJECT_SOURCE_DIR` with
     `PROJECT_BINARY_DIR` in the in-source check (R202);
-  - add the R203 global-property guard before `add_library(overdrive
-    ...)`. Its message reads "Overdrive was added twice: first from
-    <dir>, again from <dir>".
+  - add the R203 guard before `add_library(overdrive ...)`:
+    - if the global property is set: "Overdrive was added twice: first
+      from <dir>, again from <dir>";
+    - else, if `TARGET overdrive` exists: "a target named overdrive
+      already exists (defined in <SOURCE_DIR>); Overdrive needs that
+      name".
 
   Check R202's ASSUMED directory-scope rule and R203's ASSUMED global
   property against the CMake documentation, and quote both in the PR.
@@ -102,7 +124,9 @@ Independent test: `ctest --preset debug -R '^consumer_(vendored|duplicate)$'`.
 - [ ] T206 [US1] Proof: `debug`, `debug-clang`, `shared`, `sanitize`,
   `release`, `windows-cross-debug`, and `windows-cross-shared` from
   clean, each with 0 warnings and all tests passing, including the two
-  new ones. (Depends on T205.)
+  new ones. A shared vendored consumer must run too, through the
+  `TARGET_RUNTIME_DLLS` copy on Windows and the build tree's runtime
+  path elsewhere. (Depends on T205.)
 
 ## Phase 2 — OVD-23 Installed route (US2, US3; depends on OVD-22)
 
@@ -119,18 +143,33 @@ Goal: install once, then find the package by name, from a moved prefix
      required file that is missing: each public header, the library,
      the three package files, `LICENSE`, and `LICENSE-UCD` (FR-009,
      FR-010).
-  3. Search every installed text file under `<libdir>/cmake/overdrive`
+  3. Compare the `file(SHA256)` of each installed license file with its
+     source, so "unchanged" is tested (FR-009).
+  4. Search every installed text file under `<libdir>/cmake/overdrive`
      for the outer source and build directories (R206).
-  4. Rename the prefix to `<work>/a b/moved`.
-  5. Configure the consumer with `CMAKE_PREFIX_PATH` set to the moved
-     prefix, then build and run it.
-  6. Configure once more, requesting version 0.2, and require a failed
+  5. Rename the prefix to `<work>/a b/moved`.
+  6. Configure the consumer with `CMAKE_PREFIX_PATH` set to the moved
+     prefix and `CMAKE_FIND_USE_PACKAGE_REGISTRY` off. Require that
+     `overdrive_DIR` is under the moved prefix (US2 scenario 1). Build
+     and run it. The consumer also runs T201's usage-requirement check
+     on the imported `overdrive::overdrive`.
+  7. Configure once more, requesting version 0.2, and require a failed
      configure that names both versions (US2 scenario 4).
 
+  Separately, mode `vendored` gains a last step (FR-016). It runs
+  `cmake --install` on the consumer build to a scratch prefix, and
+  requires that no Overdrive file appears there: no `overdrive` header,
+  library, package file, or `doc/overdrive`. The consumer installs its
+  own program only.
+
   Register `consumer_installed` with `TIMEOUT 300`. Watch it fail at
-  step 1 or 2 on today's tree, and record the failure. (Depends on
-  OVD-22.)
-- [ ] T208 [US2] In `CMakeLists.txt`, add the install rules (R205):
+  step 1 or 2 on today's tree, and record the failure. The FR-016 step
+  passes today, since no install rules exist. Watch it fail by running
+  T208's rules with `OVERDRIVE_INSTALL` forced ON for the vendored
+  consumer, then revert. (Depends on OVD-22.)
+- [ ] T208 [US2] In `CMakeLists.txt`, add `option(OVERDRIVE_INSTALL
+  "Generate Overdrive's install rules" ${PROJECT_IS_TOP_LEVEL})`
+  (R212). Inside `if(OVERDRIVE_INSTALL)`, add the install rules (R205):
   - `include(GNUInstallDirs)` and `include(CMakePackageConfigHelpers)`;
   - `install(TARGETS overdrive EXPORT overdrive-targets RUNTIME LIBRARY
     ARCHIVE FILE_SET HEADERS INCLUDES DESTINATION
@@ -150,9 +189,10 @@ Goal: install once, then find the package by name, from a moved prefix
   them in the PR. (Depends on T207.)
 - [ ] T209 [P] [US2] In `CMakeLists.txt`, install `LICENSE` and
   `third_party/ucd/LICENSE` (renamed to `LICENSE-UCD`) to
-  `${CMAKE_INSTALL_DOCDIR}` (R207). Check that `CMAKE_INSTALL_DOCDIR`
-  defaults to `share/doc/overdrive`. This shares the install section
-  with T208; land it in the same commit series. (Depends on T207.)
+  `${CMAKE_INSTALL_DATAROOTDIR}/doc/overdrive`, inside the same
+  `if(OVERDRIVE_INSTALL)` (R207). Never use `CMAKE_INSTALL_DOCDIR`: it
+  is inherited from a consumer. This shares the install section with
+  T208; land it in the same commit series. (Depends on T207.)
 - [ ] T210 [US3] Show that the check works: temporarily drop one header
   from the file set, watch `consumer_installed` fail at the file-list or
   build step, then restore it. Record the output for the PR. (Depends

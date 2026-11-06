@@ -20,10 +20,10 @@
       "id": "OVD-23", "title": "Installed route: install rules, package config, license files, consumer_installed",
       "phase": 2, "tasks": ["T207","T208","T209","T210","T211"], "depends_on": ["OVD-22"],
       "owns": ["CMakeLists.txt","cmake/overdrive-config.cmake.in","tests/CMakeLists.txt","tests/consumer/CMakeLists.txt","tests/consumer/run_consumer.cmake"],
-      "requirements": ["FR-005","FR-006","FR-007","FR-008","FR-009","FR-010","FR-014","SC-002","SC-004"],
+      "requirements": ["FR-005","FR-006","FR-007","FR-008","FR-009","FR-010","FR-014","FR-016","SC-002","SC-004"],
       "proof": ["ctest --preset debug -R ^consumer_","ctest --preset shared -R ^consumer_","ctest --preset windows-cross-shared -R ^consumer_","gh pr checks <N>"],
       "tier": "opus",
-      "note": "no .github/ change: CI proves the routes through the existing ctest step (R208)"
+      "note": "no .github/ change: CI proves the routes through the existing ctest step (R208); install rules sit behind OVERDRIVE_INSTALL (R212, an assumption)"
     },
     {
       "id": "OVD-24", "title": "Docs: using Overdrive from CMake",

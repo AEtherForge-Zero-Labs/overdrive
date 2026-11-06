@@ -10,19 +10,23 @@ Make Overdrive consumable from another CMake project by two routes that
 give the same `overdrive::overdrive` target.
 
 - **Vendored subproject.** Defaults follow whether Overdrive is the
-  top-level project, so a consumer gets no Overdrive tests. Overdrive
-  stops setting the output directory for the whole build tree, and a
-  second copy is refused.
+  top-level project, so a consumer gets no Overdrive tests and no
+  install rules. Overdrive sets its output directory only as the
+  top-level project. A second copy is refused, and so is a consumer
+  target already named `overdrive`.
 - **Installed package.** The public headers become a header file set
-  that drives both the build and the install. The install rules add an
-  exported target, a relocatable config file, a `SameMinorVersion`
-  version file, `LICENSE`, and the UCD notice.
+  that drives both the build and the install. The install rules, behind
+  `OVERDRIVE_INSTALL`, add:
+  - an exported target;
+  - a relocatable config file;
+  - a `SameMinorVersion` version file;
+  - `LICENSE` and the UCD notice, under `doc/overdrive`.
 
-Both routes are proved by two CTest tests that build and run a minimal
+Both routes are proved by three CTest tests that build and run a minimal
 consumer as a separate project. Every CI job already runs CTest for its
 preset, so CI covers Linux, macOS, and Wine, static and shared, with no
 workflow change. The decisions are in [research.md](research.md)
-(R201–R211), and the build contract is in
+(R201–R212), and the build contract is in
 [contracts/consumer.md](contracts/consumer.md).
 
 ## Technical Context
@@ -32,7 +36,7 @@ minimum)
 **Primary Dependencies**: CMake's own `GNUInstallDirs` and
 `CMakePackageConfigHelpers` modules. No new library.
 **Storage**: N/A
-**Testing**: CTest. Two new tests run a nested CMake configure, build,
+**Testing**: CTest. Three new tests run a nested CMake configure, build,
 and run of `tests/consumer/`. The existing header checks stay as they
 are.
 **Target Platform**: as 001 and 002: Linux, macOS, and Windows through
@@ -80,6 +84,7 @@ Resolved by R208: CI runs the routes through its existing test step.
 | `overdrive::overdrive` | CMake target | now also installed and exported |
 | `overdrive` | `find_package` name | new |
 | `OVERDRIVE_BUILD_TESTS` | option | default is now `PROJECT_IS_TOP_LEVEL` (ON for Overdrive's own builds, as before) |
+| `OVERDRIVE_INSTALL` | option | new; default `PROJECT_IS_TOP_LEVEL`; gates every install rule (R212, an assumption) |
 | install layout | files | new (`contracts/consumer.md`) |
 
 ## New pieces (Art. VII plan gate)
@@ -138,10 +143,12 @@ and the test script, so they cannot run in parallel (Art. IX).
    script, and the `consumer_vendored` and `consumer_duplicate` tests.
    Covers FR-001–004, FR-011–013, SC-001, SC-003, SC-005. The header
    file set lands here, because the vendored route already uses it.
-2. **OVD-23 Installed route.** R205–R207, R210, R211: install rules, the
-   config template, the license files, and the `consumer_installed`
-   test with its file-list, relocation, and build-path checks. Covers
-   FR-005–010, FR-014, SC-002, SC-004. After 1.
+2. **OVD-23 Installed route.** R205–R207 and R210–R212: install rules
+   behind `OVERDRIVE_INSTALL`, the config template, the license files,
+   and the `consumer_installed` test with its file-list, checksum,
+   relocation, and build-path checks, plus the check that a vendored
+   install adds nothing. Covers FR-005–010, FR-014, FR-016, SC-002,
+   SC-004. After 1.
 3. **OVD-24 Docs.** README's "Using Overdrive" section with both routes
    and the Windows DLL step, `docs/architecture.md`, and
    `docs/compatibility.md`'s description of what CI runs. Covers

@@ -98,8 +98,9 @@ installed copy alone.
 
 1. **Given** Overdrive installed to a prefix, **When** a consumer finds
    the package from that prefix and links `overdrive::overdrive`,
-   **Then** it builds with zero warnings and runs, with Overdrive's
-   source and build trees absent.
+   **Then** it builds with zero warnings and runs. The package it found
+   is the one under that prefix, and nothing it uses refers to
+   Overdrive's source or build tree.
 2. **Given** an installed static library, **When** the consumer links
    it, **Then** the libraries Overdrive itself needs are linked
    automatically, with no extra line in the consumer.
@@ -151,8 +152,14 @@ the job fail.
   Clang 19, or Apple Clang 17. A vendored copy refuses any other
   compiler at configure time with its existing message, not with
   compile errors.
-- **Consumer already has a target named `overdrive`.** Overdrive's own
-  target name is internal. Consumers link only the namespaced name.
+- **Consumer already has a target named `overdrive`.** Unsupported.
+  Overdrive needs that name in the build. Configuration stops with a
+  message that names the collision, not with CMake's generic
+  duplicate-target error.
+- **Consumer installs its own program.** A vendored Overdrive adds
+  nothing to the consumer's install: not its license, headers, or
+  library. A consumer that needs the library installed, for example a
+  shared build, turns that on by name.
 - **Overdrive vendored twice**, for example by the consumer and by one
   of its dependencies. Adding a second copy fails at configure time with
   a message, not with confusing duplicate-target errors.
@@ -179,11 +186,21 @@ the job fail.
   existing `OVERDRIVE_BUILD_*` option. As the top-level project, the
   defaults are unchanged.
 - **FR-003**: As a subproject, Overdrive MUST NOT change the consumer's
-  global build settings: compile options, output directories, the C
-  standard of other targets, or whether testing is enabled. Overdrive's
-  warning flags MUST stay private to Overdrive's own targets.
+  build beyond what linking `overdrive::overdrive` requires.
+  - Its usage requirements carry no compile options, and no compile
+    definition except `OVERDRIVE_SHARED`.
+  - Targets that do not link Overdrive keep their C standard. Targets
+    that do link it get C23, as FR-006 requires.
+  - Its cache entries are limited to its own `OVERDRIVE_*` and
+    `overdrive_*` names and `BUILD_SHARED_LIBS`.
+  - Whether testing is enabled stays the consumer's choice.
 - **FR-004**: A second copy of Overdrive added to the same build MUST
-  stop configuration with a message naming both source directories.
+  stop configuration with a message naming both source directories. A
+  consumer target already named `overdrive` MUST stop configuration with
+  a message naming that collision.
+- **FR-016**: As a subproject, Overdrive MUST NOT add install rules
+  unless the consumer turns them on by name. With them on, the install
+  follows FR-005 to FR-010.
 
 **Installed package**
 
@@ -200,9 +217,11 @@ the job fail.
   every 0.x interface may change (README).
 - **FR-008**: The install MUST be relocatable: no absolute path of the
   machine that built it appears in the installed package files.
-- **FR-009**: The install MUST include Overdrive's `LICENSE` unchanged,
-  and the license notices of vendored third-party data compiled into the
-  library. Installing MUST NOT add or imply any license grant.
+- **FR-009**: The install MUST include Overdrive's `LICENSE`
+  byte-for-byte unchanged, and the license notices of vendored
+  third-party data compiled into the library, in a documentation
+  directory of Overdrive's own. Installing MUST NOT add or imply any
+  license grant.
 - **FR-010**: The install MUST NOT include tests, examples, benchmarks,
   private headers under `src/`, or generated build-tree files other than
   the package files.
@@ -264,6 +283,12 @@ the job fail.
   `FetchContent`) is the vendored route under another name. It is
   supported to the extent that the vendored route is, with no extra
   work.
+- **Install rules are opt-in when vendored** (FR-016). The first
+  consumer links Overdrive statically, so it needs nothing of
+  Overdrive at run time. A consumer that does turns
+  `OVERDRIVE_INSTALL` on.
+- **A consumer target named `overdrive`** is unsupported. The
+  configure-time message says so.
 - **pkg-config** is out of scope. Both of the owner's consumers use
   CMake, so no present requirement asks for it.
 - **The license** stays "all rights reserved" until the owner chooses

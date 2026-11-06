@@ -16,7 +16,10 @@ This feature adds no runtime data. Its entities are build artifacts.
 - **Invariant**: at most one copy per build. The first copy records its
   directory in a global property, and a second copy stops configuration
   naming both directories (R203).
-- **Defaults**: tests off when not top-level (R201).
+- **Defaults**: tests off when not top-level (R201), and install rules
+  off (R212).
+- **Collision**: a consumer target already named `overdrive` stops
+  configuration with its own message (R203).
 
 ## Installed package
 

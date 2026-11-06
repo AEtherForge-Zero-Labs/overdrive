@@ -65,6 +65,24 @@ unsupported.
   outputs. That is still a decision made on the consumer's behalf.
 - **Alternatives**: leave it. Rejected: a shared Overdrive's DLL would
   land in a directory the consumer did not choose.
+- **What a test can see**: a subdirectory's normal variables and
+  directory properties never reach the parent. The review of this plan
+  observed it, on CMake 4.2.3: vendoring today's tree left the parent's
+  `COMPILE_OPTIONS`, `CMAKE_RUNTIME_OUTPUT_DIRECTORY`, and
+  `CMAKE_C_STANDARD` unchanged. So the output directory is set
+  top-level-only for the sake of Overdrive's own outputs, and no test
+  checks it in the parent, since such a check could not fail. FR-003
+  is tested through the two channels that do reach a consumer:
+  - **Usage requirements.** `overdrive`'s `INTERFACE_COMPILE_OPTIONS`
+    is unset, and its `INTERFACE_COMPILE_DEFINITIONS` is at most
+    `OVERDRIVE_SHARED`. This is checked on the vendored target and on
+    the imported one.
+  - **Cache entries.** Only `OVERDRIVE_*`, `overdrive_*`, and
+    `BUILD_SHARED_LIBS` appear after Overdrive is added. `option()` and
+    `try_compile` create those.
+
+  The consumer's warning flags match Overdrive's, so a check of compile
+  lines could not see a warning leak. The usage-requirement check can.
 
 ### R203 — A second copy stops configuration
 
@@ -72,13 +90,26 @@ unsupported.
   property that records the source directory of the first copy. If it
   is set, configuration stops with a message naming both directories.
   Otherwise Overdrive sets it.
+- **A consumer target named `overdrive`**: unsupported. If the property
+  is unset but `TARGET overdrive` exists, the target is the consumer's
+  own. Configuration stops with "a target named overdrive already
+  exists (defined in <dir>); Overdrive needs that name", where the
+  directory is the target's `SOURCE_DIR`.
 - **Rationale**: FR-004. Without the check, the second copy fails on a
   duplicate target name with a message that does not say why. A global
   property is visible from every directory of the build (ASSUMED,
-  `set_property(GLOBAL)`).
-- **Alternatives**: return early and reuse the first copy. Rejected:
-  the two copies may differ, and a silent reuse hides which one is
-  built.
+  `set_property(GLOBAL)`). Global properties also start empty on every
+  configure, so a re-run does not trip the guard. The cached
+  `overdrive_SOURCE_DIR` that `project()` writes would trip it (the
+  review of this plan, INFERRED).
+- **Alternatives**:
+  - **Return early and reuse the first copy.** Rejected: the two copies
+    may differ, and a silent reuse hides which one is built.
+  - **Rename the internal target**, with `OUTPUT_NAME` and
+    `EXPORT_NAME` set to `overdrive`, so a consumer's own `overdrive`
+    target can coexist. Rejected for now: no consumer has the
+    collision, and the rename touches every test registration
+    (Art. VII). The guard makes the limit explicit.
 
 ### R204 — Public headers become a header file set
 
@@ -100,7 +131,12 @@ unsupported.
   include directory automatically. Its documented route is `INCLUDES
   DESTINATION`, which "specifies a list of directories which will be
   added to the INTERFACE_INCLUDE_DIRECTORIES target property" of the
-  export. VERIFIED. So the install rule names it explicitly.
+  export. VERIFIED. So the install rule names it explicitly. The review
+  of this plan observed, on CMake 4.2.3, that the export already
+  carries the header set's base directory as `${_IMPORT_PREFIX}/include`
+  without `INCLUDES DESTINATION`. So on that version the clause is
+  redundant and harmless. Whether 3.28 behaves the same is
+  undocumented, and the moved-prefix test is the real proof.
 - **Alternatives**: `install(DIRECTORY include/ ...)`. Rejected: it
   would install whatever is in the directory, not the declared list.
 
@@ -147,18 +183,25 @@ unsupported.
 ### R207 — License and notices are installed as files
 
 - **Decision**: `LICENSE` is installed unchanged to
-  `${CMAKE_INSTALL_DOCDIR}`. `third_party/ucd/LICENSE` is installed
-  beside it as `LICENSE-UCD`. Nothing else is said about licensing.
+  `${CMAKE_INSTALL_DATAROOTDIR}/doc/overdrive`.
+  `third_party/ucd/LICENSE` is installed beside it as `LICENSE-UCD`.
+  Nothing else is said about licensing.
 - **Rationale**: FR-009. The library compiles in tables generated from
   the vendored UCD (001 R5), so the UCD's notice travels with it.
   VERIFIED that `third_party/ucd/LICENSE` exists and that `LICENSE`
-  grants nothing. `CMAKE_INSTALL_DOCDIR` defaults to
-  `share/doc/<project>` (ASSUMED, `GNUInstallDirs`).
+  grants nothing.
+- **Not `CMAKE_INSTALL_DOCDIR`**: the review of this plan read
+  `GNUInstallDirs` and found that it sets `CMAKE_INSTALL_DOCDIR` as a
+  normal variable, `DATAROOTDIR/doc/${PROJECT_NAME}`, which
+  subdirectories inherit. It observed a vendored library printing the
+  consumer's `share/doc/app` (on 4.2.3). So `CMAKE_INSTALL_DOCDIR`
+  could write Overdrive's `LICENSE` over the consumer's. A fixed
+  `doc/overdrive` under `DATAROOTDIR` cannot.
 
 ### R208 — The routes are proved by CTest, not by a workflow change
 
-- **Decision**: two CTest tests, `consumer_vendored` and
-  `consumer_installed`, are registered when `OVERDRIVE_BUILD_TESTS` is
+- **Decision**: three CTest tests, `consumer_vendored`,
+  `consumer_duplicate`, and `consumer_installed`, are registered when `OVERDRIVE_BUILD_TESTS` is
   on. Each runs `tests/consumer/run_consumer.cmake`, which configures,
   builds, and runs the minimal consumer as a separate CMake project.
   The script passes the outer build's settings to that project: the
@@ -177,8 +220,20 @@ unsupported.
   (VERIFIED in `docs/compatibility.md`.) So two tests cover every
   platform, static and shared, with no change to `.github/`, which
   CODEOWNERS reserves for the owner. A test's own `TIMEOUT` takes
-  precedence over the preset's 60 s default (ASSUMED, `ctest --timeout`
-  applies to tests without one).
+  precedence over the preset's 60 s default. This is ASSUMED: the review
+  of this plan read `ctest --help` on 4.2.3, which describes `--timeout`
+  as "Set the default test timeout".
+- **Details from the review of this plan**:
+  - The Wine presets use cache variables, not a toolchain file
+    (VERIFIED, `CMakePresets.json`), so the forwarded list is complete
+    today. The script also forwards `CMAKE_TOOLCHAIN_FILE` when set,
+    and fails when `CMAKE_FIND_ROOT_PATH` is set, since forwarding it is
+    not designed.
+  - The test's command is `${CMAKE_COMMAND} -P <script>`, a path and
+    not a target, so CTest does not prepend the emulator. The script
+    runs the program through the emulator itself.
+  - Each mode works in its own directory, `<build>/consumer/<mode>`, so
+    `ctest -j` cannot collide.
 - **Alternatives**: new CI jobs in `ci.yml`. Rejected: owner-reserved,
   and they would duplicate the matrix the presets already give.
 
@@ -216,15 +271,39 @@ unsupported.
 
 ### R211 — What the install holds
 
-- **Decision**: the installed-route test lists the prefix and fails on
-  any file outside this set:
+- **Decision**: the installed-route test lists the prefix. It fails on
+  any required file that is missing, on a license file whose SHA-256
+  differs from its source, and on any file outside this set:
   - `include/overdrive/*.h`;
   - the library and, on Windows, its import library and DLL;
   - `<libdir>/cmake/overdrive/*`;
-  - `<docdir>/LICENSE*`.
+  - `<datarootdir>/doc/overdrive/LICENSE` and `LICENSE-UCD`.
+
+  The consumer finds the package with `CMAKE_FIND_USE_PACKAGE_REGISTRY`
+  off, and the test checks that the resulting `overdrive_DIR` is under
+  the moved prefix (US2 scenario 1).
 - **Rationale**: FR-010, SC-004. The list is the contract (see
   `contracts/consumer.md`). A file outside it is a leak, for example a
   test binary or a private header.
+
+### R212 — Install rules are opt-in when vendored
+
+- **Decision**: `option(OVERDRIVE_INSTALL "Generate Overdrive's install
+  rules" ${PROJECT_IS_TOP_LEVEL})`. `include(GNUInstallDirs)`, the
+  package helpers, and every `install()` call sit inside
+  `if(OVERDRIVE_INSTALL)`. ASSUMPTION, recorded with the `assumption`
+  label on the PR (Art. IX).
+- **Rationale**: FR-016. A vendoring consumer's `cmake --install` should
+  install its own program, not Overdrive's headers, archive, package
+  files, or license. The first consumer links Overdrive statically, so
+  nothing of Overdrive is needed at run time. A consumer with a shared
+  vendored build that needs the library installed sets the option by
+  name. Keeping `GNUInstallDirs` inside the block also keeps its
+  `CMAKE_INSTALL_*` cache entries out of a vendoring consumer's cache
+  (FR-003).
+- **Alternatives**: install rules always, which is the common
+  open-source default. Rejected: they put Overdrive's files into every
+  vendoring consumer's install, unasked.
 
 ## C. Tensions
 

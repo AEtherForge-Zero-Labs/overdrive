@@ -24,15 +24,21 @@ target_link_libraries(app PRIVATE overdrive::overdrive)
 - **Requirements**: CMake 3.28; GCC 14, Clang 19, or Apple Clang 17.
   Any other compiler stops configuration with Overdrive's existing
   message.
-- **Defaults when not top-level**: tests, examples, and benchmarks are
-  off. A consumer turns one on by setting its option before adding the
-  directory: `OVERDRIVE_BUILD_TESTS`, `OVERDRIVE_BUILD_EXAMPLES`, or
-  `OVERDRIVE_BUILD_BENCHMARKS`.
-- **Not changed in the consumer's build**: compile options of other
-  targets, output directories, the C standard of other targets, and
-  whether testing is enabled.
+- **Defaults when not top-level**: tests, examples, benchmarks, and
+  install rules are off. A consumer turns one on by setting its option
+  before adding the directory: `OVERDRIVE_BUILD_TESTS`,
+  `OVERDRIVE_BUILD_EXAMPLES`, `OVERDRIVE_BUILD_BENCHMARKS`, or
+  `OVERDRIVE_INSTALL`.
+- **What linking adds**: C23 and, when shared, `OVERDRIVE_SHARED`, on
+  targets that link `overdrive::overdrive`. Nothing else: no compile
+  options, no other definitions.
+- **Not changed in the consumer's build**: targets that do not link
+  Overdrive, whether testing is enabled, and cache entries outside
+  `OVERDRIVE_*`, `overdrive_*`, and `BUILD_SHARED_LIBS`.
 - **A second copy** in the same build stops configuration with a message
   naming both source directories.
+- **A consumer target named `overdrive`** is unsupported. Configuration
+  stops with a message naming the collision.
 - **Fetching at configure time** (for example with `FetchContent`) is
   this route.
 
@@ -53,8 +59,9 @@ target_link_libraries(app PRIVATE overdrive::overdrive)
 
 ## Install layout
 
-The install holds exactly these files. Anything else is a defect
-(FR-010).
+This is the install of a top-level Overdrive build, or of a vendored
+one with `OVERDRIVE_INSTALL` on. It holds exactly these files, and
+anything else is a defect (FR-010).
 
 | Path under the prefix | Contents |
 |---|---|
@@ -63,11 +70,12 @@ The install holds exactly these files. Anything else is a defect
 | `bin/` (Windows, shared) | the DLL |
 | `<libdir>/` (Windows, shared) | the import library |
 | `<libdir>/cmake/overdrive/` | the config, version, and targets files |
-| `<docdir>/LICENSE` | Overdrive's `LICENSE`, unchanged |
-| `<docdir>/LICENSE-UCD` | the notice for the vendored Unicode data compiled into the library |
+| `<datarootdir>/doc/overdrive/LICENSE` | Overdrive's `LICENSE`, byte-for-byte unchanged |
+| `<datarootdir>/doc/overdrive/LICENSE-UCD` | the notice for the vendored Unicode data compiled into the library |
 
-`<libdir>` and `<docdir>` are the `GNUInstallDirs` defaults unless the
-installer overrides them.
+`<libdir>` and `<datarootdir>` are the `GNUInstallDirs` defaults unless
+the installer overrides them. The documentation directory is always
+`doc/overdrive`, never the consumer's `CMAKE_INSTALL_DOCDIR`.
 
 ## Windows shared libraries
 
