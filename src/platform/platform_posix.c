@@ -434,10 +434,11 @@ static void call_previous(const struct sigaction *action, int signal, siginfo_t 
         if ((action->sa_flags & (SA_NODEFER | SA_RESETHAND)) == 0) {
             sigaddset(&added, signal);
         }
-        /* This handler runs with the mask at delivery plus its own sa_mask,
-         * which is every handled signal. Setting uc_sigmask first would
-         * briefly unblock the signal and the application's sa_mask, and
-         * XSH pthread_sigmask delivers a
+        /* This handler runs with the mask at delivery plus its own sa_mask:
+         * the application's sa_mask and every handled signal. So the
+         * target is reached by releasing handled signals only. Setting
+         * uc_sigmask first would briefly unblock the signal and the
+         * application's sa_mask, and XSH pthread_sigmask delivers a
          * pending unblocked signal "before pthread_sigmask() returns". So
          * nothing the target blocks is ever unblocked: block the additions
          * first, then unblock the handled signals in neither set. */
