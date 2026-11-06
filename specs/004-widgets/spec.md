@@ -395,7 +395,7 @@ frame with an expected screen.
 
 ## Dependencies on decisions outside this spec
 
-- None. Features 001 (rendering) and 002 (input) are merged into
-  `main`. 003 (packaging) is specified, and its implementation is in
-  progress. The first widget issue waits for 003's build-file issues,
-  which own the files it edits (plan.md, Workstreams).
+- None. Features 001 (rendering), 002 (input), and 003 (packaging) are
+  merged into `main`. The widget issues that edit 003's files (the
+  build files, `README.md`, and `docs/architecture.md`) wait for the
+  003 issues that owned them (plan.md, Workstreams); those have merged.
