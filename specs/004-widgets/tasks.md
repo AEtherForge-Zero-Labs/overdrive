@@ -227,7 +227,7 @@ Goal: SC-003 and SC-005 across all three widgets. Independent test:
 
   Register it in `examples/CMakeLists.txt` with `ovd_target_warnings`.
 - [ ] T323 [P] Add "Part 3: `widget_demo`" to `docs/validation/manual-checklist.md`, with the six steps from quickstart.md and a results template naming the terminal and its version (repo specifics).
-- [ ] T324 [P] Add a "Widgets" section to `docs/architecture.md`: the modules and their paradigms (plan.md), caller-owned state and entry correction (R302), and the text-fitting rule (R308). Remove Widgets from "Not in this architecture (yet)". In `README.md`, change "Layout, motion, and widgets are later features" to name only layout and motion, and add a short pointer to `widgets.h`. State only what the tests show (Art. XV).
+- [ ] T324 [P] Add a "Widgets" section to `docs/architecture.md`: the modules and their paradigms (plan.md), caller-owned state and entry correction (R302), and the text-fitting rule (R308). Remove Widgets from "Not in this architecture (yet)", including the sentence "Layout, Motion, and Widgets have no present requirement yet", which is stale from the day this spec merges. In `README.md`, change "Layout, motion, and widgets are later features" to name only layout and motion, and add a short pointer to `widgets.h`. State only what the tests show (Art. XV).
 - [ ] T325 Proof: the T309 preset list from clean, and `widget_demo` built in `debug`. Open a `needs-human` issue for Part 3 of the checklist in Windows Terminal and one POSIX terminal, and list the real-terminal steps in the PR as UNVERIFIED. (Depends on T322–T324.)
 
 ## Dependencies

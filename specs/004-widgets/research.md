@@ -213,6 +213,10 @@ piece below names the FR it serves.
   Surrogates and values above U+10FFFF encode as nothing, and the key
   returns `OVD_OUTCOME_IGNORED`. The decoder never produces them, but
   an application can build any event.
+- **Alternatives considered**: reuse the static `encode_utf8` in
+  `examples/input_demo.c` (VERIFIED, read). The library cannot depend
+  on an example, and an example sees only the public API, so the
+  example keeps its copy.
 
 ### R315 — What the prompt filters
 
@@ -325,6 +329,13 @@ piece below names the FR it serves.
   transparent state**: resolved by R302.
 - **Art. VII vs. a function-pointer interface**: justified by FR-007,
   FR-014, and SC-004 (R303).
+- **Identity §4.4 and §4.6 vs. no Layout module**: §4.4 says Layout
+  "computes widget geometry", and §4.6 builds widgets "on the
+  lower-level rendering and layout interfaces". Here the caller's
+  `OvdRect` is the layout interface, and the application computes it.
+  The identity spec binds naming (Art. XIV) and is not a module list
+  (constitution: "a naming map"), so no Layout module is added without
+  a present requirement (Art. VII).
 - **Spec amendments made during planning**: the `UNCHANGED` outcome
   (R304) and direct-buffer repair (R312). Both are in `spec.md` in this
   change and recorded here (Art. IX).
