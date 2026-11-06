@@ -14,16 +14,21 @@ add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 include(GNUInstallDirs)
 
 set(OVERDRIVE_CONSUMER_ROUTE "vendored" CACHE STRING
-    "How the consumer gets Overdrive: vendored, duplicate, or collision")
-set_property(CACHE OVERDRIVE_CONSUMER_ROUTE PROPERTY STRINGS vendored duplicate collision)
-set(OVERDRIVE_SOURCE_DIR "" CACHE PATH "Overdrive's source tree")
-if(NOT IS_DIRECTORY "${OVERDRIVE_SOURCE_DIR}")
+    "How the consumer gets Overdrive: vendored, duplicate, collision, or installed")
+set_property(CACHE OVERDRIVE_CONSUMER_ROUTE
+    PROPERTY STRINGS vendored duplicate collision installed)
+set(OVERDRIVE_CONSUMER_VERSION "0.1" CACHE STRING
+    "The version the installed route requests")
+set(OVERDRIVE_SOURCE_DIR "" CACHE PATH "Overdrive's source tree (all routes but installed)")
+if(NOT OVERDRIVE_CONSUMER_ROUTE STREQUAL "installed" AND NOT IS_DIRECTORY "${OVERDRIVE_SOURCE_DIR}")
     message(FATAL_ERROR "consumer: OVERDRIVE_SOURCE_DIR is not a directory: '${OVERDRIVE_SOURCE_DIR}'")
 endif()
 
 get_cmake_property(consumer_cache_before CACHE_VARIABLES)
 
-if(OVERDRIVE_CONSUMER_ROUTE STREQUAL "vendored")
+if(OVERDRIVE_CONSUMER_ROUTE STREQUAL "installed")
+    find_package(overdrive ${OVERDRIVE_CONSUMER_VERSION} REQUIRED)
+elseif(OVERDRIVE_CONSUMER_ROUTE STREQUAL "vendored")
     add_subdirectory("${OVERDRIVE_SOURCE_DIR}" overdrive)
 elseif(OVERDRIVE_CONSUMER_ROUTE STREQUAL "duplicate")
     # Must stop at the second copy (R203).
@@ -44,6 +49,9 @@ target_link_libraries(consumer PRIVATE overdrive::overdrive)
 # Tells run_consumer.cmake which file to run.
 file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/consumer_path.txt"
     CONTENT "$<TARGET_FILE:consumer>")
+# The consumer installs its own program; a vendored Overdrive must add
+# nothing to that install (FR-016).
+install(TARGETS consumer)
 
 # FR-003, channel 1: what linking adds. C23, and OVERDRIVE_SHARED exactly
 # when the library is shared; no compile options, no other definitions.
@@ -82,8 +90,9 @@ foreach(name IN LISTS consumer_cache_after)
     endif()
 endforeach()
 
-# SC-003: Overdrive brings exactly its library and its generated tables.
-# Anything else is a test, example, or benchmark leaking in.
+# SC-003: a vendored Overdrive brings exactly its library and its
+# generated tables. Anything else is a test, example, or benchmark
+# leaking in.
 function(consumer_collect_targets directory out)
     get_property(targets DIRECTORY "${directory}" PROPERTY BUILDSYSTEM_TARGETS)
     get_property(subdirectories DIRECTORY "${directory}" PROPERTY SUBDIRECTORIES)
@@ -93,14 +102,16 @@ function(consumer_collect_targets directory out)
     endforeach()
     set("${out}" "${targets}" PARENT_SCOPE)
 endfunction()
-consumer_collect_targets("${CMAKE_CURRENT_BINARY_DIR}/overdrive" consumer_targets)
-get_property(consumer_subdirectories DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/overdrive"
-    PROPERTY SUBDIRECTORIES)
-list(SORT consumer_targets)
-if(NOT consumer_targets STREQUAL "ovd_unicode_tables;overdrive")
-    message(FATAL_ERROR
-        "consumer: check target-allowlist failed: Overdrive defines '${consumer_targets}' "
-        "(subdirectories: '${consumer_subdirectories}'), expected 'ovd_unicode_tables;overdrive'")
+if(OVERDRIVE_CONSUMER_ROUTE STREQUAL "vendored")
+    consumer_collect_targets("${CMAKE_CURRENT_BINARY_DIR}/overdrive" consumer_targets)
+    get_property(consumer_subdirectories DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/overdrive"
+        PROPERTY SUBDIRECTORIES)
+    list(SORT consumer_targets)
+    if(NOT consumer_targets STREQUAL "ovd_unicode_tables;overdrive")
+        message(FATAL_ERROR
+            "consumer: check target-allowlist failed: Overdrive defines '${consumer_targets}' "
+            "(subdirectories: '${consumer_subdirectories}'), expected 'ovd_unicode_tables;overdrive'")
+    endif()
 endif()
 
 # A shared Overdrive's DLL must sit beside the program on Windows. The
