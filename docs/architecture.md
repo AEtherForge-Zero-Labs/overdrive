@@ -230,9 +230,10 @@ following through the public API, with a counting allocator:
 Feature 003 ([`specs/003-packaging/`](../specs/003-packaging/)) gives
 another CMake project two routes to the same target,
 `overdrive::overdrive`:
-- **From the source tree**, with `add_subdirectory`. When Overdrive is
-  not the top-level project, its tests, examples, benchmarks, and
-  install rules default to off (`PROJECT_IS_TOP_LEVEL`, R201, R212). A
+- **From the source tree**, with `add_subdirectory`. Examples and
+  benchmarks default to off. Tests and install rules default to on only
+  when Overdrive is the top-level project (`PROJECT_IS_TOP_LEVEL`,
+  R201, R212). A
   second copy in one build, or another target named `overdrive`, stops
   configuration (R203).
 - **From an installed copy**, with `find_package(overdrive)`. The

@@ -93,13 +93,15 @@ target_link_libraries(app PRIVATE overdrive::overdrive)
 ```
 
 - **Defaults.** When Overdrive is not the top-level project, its tests,
-  examples, benchmarks, and install rules are off. To turn one on, set
+  examples, benchmarks, and install rules are off. They are the options
   `OVERDRIVE_BUILD_TESTS`, `OVERDRIVE_BUILD_EXAMPLES`,
-  `OVERDRIVE_BUILD_BENCHMARKS`, or `OVERDRIVE_INSTALL` before
-  `add_subdirectory`.
-- **What linking adds.** C23, and `OVERDRIVE_SHARED` when the library is
-  shared. Nothing else reaches your targets: no compile options and no
-  other definitions.
+  `OVERDRIVE_BUILD_BENCHMARKS`, and `OVERDRIVE_INSTALL`. Setting one
+  before `add_subdirectory` should turn it on (CMake policy CMP0077);
+  not tested.
+- **What linking adds.** `OVERDRIVE_SHARED` when the library is shared.
+  No compile options and no other definitions reach your targets. The
+  target also requires C23 (`c_std_23`); not tested, because the test
+  consumer sets C23 itself.
 - **Cache entries.** Overdrive adds none outside `OVERDRIVE_*`,
   `overdrive_*`, and `BUILD_SHARED_LIBS`.
 - **Refusals.** A second copy of Overdrive in the same build, or a target
@@ -125,8 +127,7 @@ target_link_libraries(app PRIVATE overdrive::overdrive)
 - **Moving it.** The prefix can be moved after installing.
 
 **Versions.** While the major version is 0, `find_package(overdrive
-0.1)` accepts only 0.1.x: an installed 0.2 or 0.0 is refused. A request
-without a version accepts any installed version.
+0.1)` accepts only 0.1.x: an installed 0.2 or 0.0 is refused.
 
 **Windows, shared.** The program needs the DLL beside it or on `PATH`.
 This step copies it after each build:
@@ -143,8 +144,9 @@ endif()
 With a static library the DLL list is empty, and the step copies
 nothing.
 
-Each claim above is checked by the consumer tests, `consumer_vendored`,
-`consumer_duplicate`, and `consumer_installed`, in every CI job. They
+Each claim above not marked "not tested" is checked by the consumer
+tests, `consumer_vendored`, `consumer_duplicate`, and
+`consumer_installed`, in every CI job. They
 build a separate minimal project with `-Wall -Wextra -Wpedantic -Werror`
 (see [`docs/compatibility.md`](docs/compatibility.md)).
 
