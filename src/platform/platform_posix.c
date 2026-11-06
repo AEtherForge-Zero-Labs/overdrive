@@ -406,11 +406,20 @@ static bool runs_handler(const struct sigaction *action)
 /* Calls the previous handler as its own action would have run it. Its
  * action is not the installed one, so what the kernel does "on entry to
  * the signal handler" for its flags is done here (XSH sigaction; R121):
- * SA_RESETHAND resets the disposition to SIG_DFL, so a fault repeated or
- * re-raised from the handler takes the default action, not this handler
- * again; SA_NODEFER leaves the signal unblocked while it runs. Both calls
- * are on XSH 2.4.3's list. A reset slot is no longer Overdrive's, so
- * disarm leaves it at SIG_DFL, as without Overdrive. */
+ * - SA_RESETHAND resets the disposition to SIG_DFL, so a fault repeated
+ *   or re-raised from the handler takes the default action, not this
+ *   handler again. A reset slot is no longer Overdrive's, so disarm
+ *   leaves it at SIG_DFL, as without Overdrive.
+ * - The mask becomes what its action installs: "the union of the current
+ *   signal mask and the value of the sa_mask", then the signal "unless
+ *   SA_NODEFER or SA_RESETHAND is set". The current mask is the one at
+ *   delivery, uc_sigmask of the interrupted context, so Overdrive's own
+ *   sa_mask (every handled signal) does not reach the handler (FR-031).
+ *   Without a context the mask is left as it is.
+ * sigaction, sigaddset, sigismember, sigemptyset, and pthread_sigmask
+ * are on XSH 2.4.3's list;
+ * ucontext_t is from <signal.h>. On return, the kernel puts
+ * back the mask from before this handler. */
 static void call_previous(const struct sigaction *action, int signal, siginfo_t *info,
                           void *context)
 {
@@ -419,11 +428,30 @@ static void call_previous(const struct sigaction *action, int signal, siginfo_t 
         sigemptyset(&default_action.sa_mask);
         sigaction(signal, &default_action, nullptr);
     }
-    if ((action->sa_flags & SA_NODEFER) != 0) {
-        sigset_t only;
-        sigemptyset(&only);
-        sigaddset(&only, signal);
-        pthread_sigmask(SIG_UNBLOCK, &only, nullptr);
+    if (context != nullptr) {
+        const ucontext_t *interrupted = context;
+        sigset_t added = action->sa_mask;
+        if ((action->sa_flags & (SA_NODEFER | SA_RESETHAND)) == 0) {
+            sigaddset(&added, signal);
+        }
+        /* This handler runs with the mask at delivery plus its own sa_mask:
+         * the application's sa_mask and every handled signal. So the
+         * target is reached by releasing handled signals only. Setting
+         * uc_sigmask first would briefly unblock the signal and the
+         * application's sa_mask, and XSH pthread_sigmask delivers a
+         * pending unblocked signal "before pthread_sigmask() returns". So
+         * nothing the target blocks is ever unblocked: block the additions
+         * first, then unblock the handled signals in neither set. */
+        sigset_t released;
+        sigemptyset(&released);
+        for (size_t i = 0; i < HANDLED_COUNT; ++i) {
+            if (sigismember(&interrupted->uc_sigmask, HANDLED[i]) == 0
+                && sigismember(&added, HANDLED[i]) == 0) {
+                sigaddset(&released, HANDLED[i]);
+            }
+        }
+        pthread_sigmask(SIG_BLOCK, &added, nullptr);
+        pthread_sigmask(SIG_UNBLOCK, &released, nullptr);
     }
     if ((action->sa_flags & SA_SIGINFO) != 0) {
         action->sa_sigaction(signal, info, context);

@@ -478,10 +478,11 @@ D1 to D5) has the full reasoning.
   the default action is raised after the application's handler.
 - The application's action is replaced, so the kernel never applies its
   `SA_RESETHAND` or `SA_NODEFER`: Overdrive's handler does, before
-  calling it (XSH `sigaction`: the reset happens "on entry to the signal
-  handler"). macOS does not report `SA_RESETHAND` when an action is read
-  back (VERIFIED on Darwin 27: set `0x4`, read `0`), so there it cannot
-  be applied. To keep the re-raise pattern working everywhere, a crash
+  calling it; `SA_NODEFER` acts through the mask, in the next bullet.
+  XSH `sigaction` puts the reset "on entry to the signal handler".
+  macOS does not report `SA_RESETHAND` when an action is read back
+  (VERIFIED on Darwin 27: set `0x4`, read `0`), so there it cannot be
+  applied. To keep the re-raise pattern working everywhere, a crash
   signal still pending after the application's crash handler returns
   (it raised its own signal) is reset to `SIG_DFL` first. Without
   `SA_RESETHAND` this changes an endless re-raise loop, and a second copy
@@ -493,6 +494,27 @@ D1 to D5) has the full reasoning.
   handler that returns from a real fault repeats, where without
   Overdrive the second fault ends the process; and an `SA_RESETHAND`
   termination handler that re-raises its signal runs again instead.
+- The application's handler runs with the mask its own action would
+  install, not with Overdrive's. Overdrive's `sa_mask` blocks every
+  handled signal while it restores (R112). Before calling the
+  application's handler, it sets the thread's mask as XSH `sigaction`
+  specifies:
+  - the mask at delivery (`uc_sigmask` of the interrupted context);
+  - plus the application's `sa_mask`;
+  - plus the signal, unless `SA_NODEFER` or `SA_RESETHAND` is set.
+
+  So, as without Overdrive, a long application `SIGINT` handler can be
+  ended by `SIGTERM`, and a handler that leaves by `longjmp` leaves no
+  extra signals blocked. On macOS `SA_RESETHAND` is not reported, so
+  there the signal stays blocked in an `SA_RESETHAND` handler.
+
+  It gets there without unblocking anything the target blocks. It
+  first blocks the additions, then unblocks the handled signals that
+  are in neither the mask at delivery nor the additions. Setting the
+  mask at delivery first would briefly unblock the signal, and XSH
+  `pthread_sigmask` delivers a pending unblocked signal before the call
+  returns, so a copy pending since the restore would run before the
+  handler rather than after it.
 - On Windows, `SIGABRT` and the exception filter are installed, and
   what they replaced is saved, before the record is armed.
 - The exit sequence in the record is built once, at create, for the
