@@ -1,0 +1,38 @@
+{
+  "schema": "overdrive-workgraph/1",
+  "feature": "003-packaging",
+  "spec": "specs/003-packaging/spec.md",
+  "contracts": "specs/003-packaging/contracts/consumer.md",
+  "protocol": "docs/process/swarm.md",
+  "shared_append_only": [],
+  "frozen_after": {},
+  "issues": [
+    {
+      "id": "OVD-22", "title": "Vendored route: subproject defaults, duplicate guard, header file set, consumer tests",
+      "phase": 1, "tasks": ["T201","T202","T203","T204","T205","T206"], "depends_on": [],
+      "owns": ["CMakeLists.txt","tests/CMakeLists.txt","tests/consumer/CMakeLists.txt","tests/consumer/main.c","tests/consumer/run_consumer.cmake"],
+      "requirements": ["FR-001","FR-002","FR-003","FR-004","FR-011","FR-012","FR-013","SC-001","SC-003","SC-005"],
+      "proof": ["cmake --preset debug","cmake --build --preset debug","ctest --preset debug","cmake --preset shared","cmake --build --preset shared","ctest --preset shared","cmake --preset windows-cross-debug","cmake --build --preset windows-cross-debug","ctest --preset windows-cross-debug","cmake --preset windows-cross-shared","cmake --build --preset windows-cross-shared","ctest --preset windows-cross-shared"],
+      "tier": "opus",
+      "note": "watch consumer_vendored fail at the target check and consumer_duplicate fail without the R203 message before changing CMakeLists.txt"
+    },
+    {
+      "id": "OVD-23", "title": "Installed route: install rules, package config, license files, consumer_installed",
+      "phase": 2, "tasks": ["T207","T208","T209","T210","T211"], "depends_on": ["OVD-22"],
+      "owns": ["CMakeLists.txt","cmake/overdrive-config.cmake.in","tests/CMakeLists.txt","tests/consumer/CMakeLists.txt","tests/consumer/run_consumer.cmake"],
+      "requirements": ["FR-005","FR-006","FR-007","FR-008","FR-009","FR-010","FR-014","FR-016","SC-002","SC-004"],
+      "proof": ["ctest --preset debug -R ^consumer_","ctest --preset shared -R ^consumer_","ctest --preset windows-cross-shared -R ^consumer_","gh pr checks <N>"],
+      "tier": "opus",
+      "note": "no .github/ change: CI proves the routes through the existing ctest step (R208); install rules sit behind OVERDRIVE_INSTALL (R212, an assumption)"
+    },
+    {
+      "id": "OVD-24", "title": "Docs: using Overdrive from CMake",
+      "phase": 3, "tasks": ["T212","T213"], "depends_on": ["OVD-23"],
+      "owns": ["README.md","docs/architecture.md","docs/compatibility.md"],
+      "requirements": ["FR-015"],
+      "proof": ["python3 -I docs_form_check (CI docs-form-check)"],
+      "tier": "sonnet",
+      "note": "state only what the consumer tests show (Art. XV)"
+    }
+  ]
+}
